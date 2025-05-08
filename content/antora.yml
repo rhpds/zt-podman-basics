@@ -1,0 +1,9 @@
+---
+name: modules
+version: master
+
+asciidoc:
+  attributes:
+    lab_name: "Learn some container basics with Podman."
+    release-version: master
+    page-pagination: true
