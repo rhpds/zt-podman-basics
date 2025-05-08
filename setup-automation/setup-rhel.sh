@@ -17,10 +17,11 @@ touch $LOG
 
 echo "Installing Podman" >> $LOG
 dnf -y install container-tools
-podman pull docker.io/httpd
-podman pull registry.access.redhat.com/ubi9/ubi
-mkdir -p ~root/my-httpd/html
-cat << EOF >> ~root/my-httpd/html/index.html
+pushd /tmp
+sudo -u rhel podman pull docker.io/httpd
+sudo -u rhel podman pull registry.access.redhat.com/ubi9/ubi
+sudo -u rhel mkdir -p ~/my-httpd/html
+cat << EOF >> ~rhel/my-httpd/html/index.html
 <html>
 <head>
 <title>
@@ -30,7 +31,8 @@ Super Businessey
 <h2>This is my super businessey web site</h2>
 </html>
 EOF
-
+chown -R rhel:rhel ~rhel/my-httpd
+popd
 
 #Create a done file to signal we have finished
 touch ${LOG}.done
