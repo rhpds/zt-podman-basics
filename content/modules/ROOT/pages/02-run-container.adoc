@@ -132,3 +132,10 @@ handy when you’re trying to figure out where to map in persistent
 storage. Persistent storage is something we’ll be covering in the next
 step, along with mapping in ports so our container can do something more
 than just sit there.
+
+Now, you'll want to exit from the shell in that container before pressing Next. 
+
+[source,bash,run]
+----
+exit
+----

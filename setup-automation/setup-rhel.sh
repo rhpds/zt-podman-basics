@@ -20,8 +20,8 @@ dnf -y install container-tools
 pushd /tmp
 sudo -u rhel podman pull docker.io/httpd
 sudo -u rhel podman pull registry.access.redhat.com/ubi9/ubi
-sudo -u rhel mkdir -p ~/my-httpd/html
-cat << EOF >> ~rhel/my-httpd/html/index.html
+sudo -u rhel mkdir -p /home/rhel/my-httpd/html
+cat << EOF >> /home/rhel/my-httpd/html/index.html
 <html>
 <head>
 <title>
@@ -31,7 +31,7 @@ Super Businessey
 <h2>This is my super businessey web site</h2>
 </html>
 EOF
-chown -R rhel:rhel ~rhel/my-httpd
+chown -R rhel:rhel /home/rhel/my-httpd
 popd
 
 #Create a done file to signal we have finished
