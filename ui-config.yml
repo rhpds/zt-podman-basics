@@ -5,13 +5,13 @@ antora:
   modules:
     - name: "01-podman-cli"
       label: "Podman Cli"
-      solveButton: true
+      #solveButton: true
     - name: "02-run-container"
       label: "Run Container"
-      solveButton: true
+      #solveButton: true
     - name: "03-persistent-storage"
       label: "Persistent Storage"
-      solveButton: true
+      #solveButton: true
 
 tabs:
   - name: ">_ terminal"
