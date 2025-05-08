@@ -1,11 +1,11 @@
 !#/bin/bash
 LOG=/dev/null
 
-while [ ! -f /opt/instruqt/bootstrap/host-bootstrap-completed ]
-do
-   echo "Waiting for Instruqt to finish booting the VM"
-   sleep 1
-done
+#while [ ! -f /opt/instruqt/bootstrap/host-bootstrap-completed ]
+#do
+#   echo "Waiting for Instruqt to finish booting the VM"
+#   sleep 1
+#done
 
 # Removed in PZ migration
 #yum remove -y google-rhui-client-rhel8.noarch
