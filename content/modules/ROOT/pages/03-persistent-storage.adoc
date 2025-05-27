@@ -25,7 +25,7 @@ You’ll find a super-businessey web site inside of
 `+~root/my-httpd/html+`, let’s map that to the location inside of this
 httpd container, that we know the web root exists in.
 
-[source,bash,run]
+[source,bash,subs="+macros,+attributes",role=copy]
 ----
 podman run -d -v ~/my-httpd/html:/usr/local/apache2/htdocs/:Z --name my-httpd httpd
 ----
@@ -44,14 +44,14 @@ should _definitely_ keep selinux in enforcing mode on a container host.
 
 Now let’s see if it worked!
 
-[source,bash,run]
+[source,bash,subs="+macros,+attributes",role=copy]
 ----
 podman exec my-httpd cat /usr/local/apache2/htdocs/index.html
 ----
 
 You should get the same contents as if you’d looked at our local file.
 
-[source,bash,run]
+[source,bash,subs="+macros,+attributes",role=copy]
 ----
 cat ~/my-httpd/html/index.html
 ----
@@ -87,14 +87,14 @@ but you want to publish 8080, you can do that when you forward it.
 
 First, let’s stop and remove our httpd container.
 
-[source,bash,run]
+[source,bash,subs="+macros,+attributes",role=copy]
 ----
 podman stop my-httpd && podman rm my-httpd
 ----
 
 Now, let’s start it back up with our volume, and the forwarded port.
 
-[source,bash,run]
+[source,bash,subs="+macros,+attributes",role=copy]
 ----
 podman run -d -v ~/my-httpd/html:/usr/local/apache2/htdocs/:Z --name my-httpd -p 8080:80 httpd
 ----
@@ -109,7 +109,7 @@ have a system with several IP’s associated with it. That would look like
 Let’s see if our container works now. You should see my super-businessey
 web site!
 
-[source,bash,run]
+[source,bash,subs="+macros,+attributes",role=copy]
 ---
 curl http://localhost:8080
 ---

@@ -15,7 +15,7 @@ sources.
 
 First, let’s see what version of podman we’re working with.
 
-[source,bash,run]
+[source,bash,subs="+macros,+attributes",role=copy]
 ----
 podman --version
 ----
@@ -24,7 +24,7 @@ This should return something like this:
 
 Let’s also look to see what images are available to us locally
 
-[source,bash,run]
+[source,bash,subs="+macros,+attributes",role=copy]
 ----
 podman image list
 ----
@@ -33,7 +33,7 @@ podman image list
 
 Now let’s see if there are any containers running
 
-[source,bash,run]
+[source,bash,subs="+macros,+attributes",role=copy]
 ----
 podman ps
 ----
@@ -46,7 +46,7 @@ To stop a container, you use the `+podman stop [identifier]+` command.
 The `+identifier+` can be either the container’s name, or ID. Let’s stop
 default-httpd by its name.
 
-[source,bash,run]
+[source,bash,subs="+macros,+attributes",role=copy]
 ----
 podman stop default-httpd
 ----
@@ -56,7 +56,7 @@ Podman confirms this action only by returning the container’s ID or Name
 will show no running containers, but the container isn’t gone, you can
 see all containers, using the `+podman ps -a+` command. Let’s try that.
 
-[source,bash,run]
+[source,bash,subs="+macros,+attributes",role=copy]
 ----
 podman ps -a
 ----
@@ -67,7 +67,7 @@ stopped, along with their state.
 We can start the container again with `+podman start [identifier]+`,
 again the identifier can be the container ID, or it’s name.
 
-[source,bash,run]
+[source,bash,subs="+macros,+attributes",role=copy]
 ----
 podman start default-httpd
 ----
@@ -78,9 +78,9 @@ Name, or ID, if it succeeded.
 Now, what about deleting containers? You can use
 `+podman rm [identifier]+` to remove a container.
 
-First let’s stop that running container, then we’ll remove it.
+First let’s stop that running container, then we’ll remove it.https://docs.google.com/document/d/15WowVUGY4xSKMdg6fCXrpIAMXlUxkLjJixYcqXbJDgg/edit?tab=t.0
 
-[source,bash,run]
+[source,bash,subs="+macros,+attributes",role=copy]
 ----
 podman stop default-httpd && podman rm default-httpd
 ----
@@ -89,7 +89,7 @@ You should get the identifier back twice, because we performed two
 actions on the same container. Now a `+podman ps -a+` should return no
 containers.
 
-[source,bash,run]
+[source,bash,subs="+macros,+attributes",role=copy]
 ----
 podman ps -a
 ----
@@ -104,7 +104,7 @@ them, separated by Tags. By default podman will pull the `+latest+` tag.
 Let’s try to pull a specific build of the mariadb image, from the Docker
 Hub public registry.
 
-[source,bash,run]
+[source,bash,subs="+macros,+attributes",role=copy]
 ----
 podman pull docker.io/mariadb:lts-ubi9
 ----
@@ -125,7 +125,7 @@ downloading `+mariadb:latest+` which in this case is a container built
 on an entirely different base. Containers give us this sort of
 flexibility.
 
-[source,bash,run]
+[source,bash,subs="+macros,+attributes",role=copy]
 ----
 podman image list
 ----
@@ -134,7 +134,7 @@ Now, we don’t actually need that mariadb container, but it would be
 useful for you to know how to delete a container image. Let’s delete
 `+mariadb:lts-ubi9+`
 
-[source,bash,run]
+[source,bash,subs="+macros,+attributes",role=copy]
 ----
 podman rmi docker.io/mariadb:lts-ubi9
 ----

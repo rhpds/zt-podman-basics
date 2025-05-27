@@ -5,6 +5,8 @@ virtualmachines:
     memory: "2G"
     cores: 1
     image_size: "40G"
+    packages:
+      - container-tools
     tags:
       - key: "AnsibleGroup"
         value: "bastions"

@@ -15,8 +15,8 @@ LOG=/dev/null
 
 touch $LOG
 
-echo "Installing Podman" >> $LOG
-dnf -y install container-tools
+#echo "Installing Podman" >> $LOG
+#dnf -y install container-tools
 pushd /tmp
 sudo -u rhel podman pull docker.io/httpd
 sudo -u rhel podman pull registry.access.redhat.com/ubi9/ubi

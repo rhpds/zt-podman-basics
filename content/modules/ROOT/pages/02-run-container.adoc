@@ -6,7 +6,7 @@ how to interact with containers once they’re running.
 
 First, let’s run a RHEL UBI container in the foreground.
 
-[source,bash,run]
+[source,bash,subs="+macros,+attributes",role=copy]
 ----
 podman run -it --rm registry.access.redhat.com/ubi9/ubi
 ----
@@ -21,7 +21,7 @@ base, linux. They share the running linux Kernel of the container host.
 Once you’re done, just exit the shell by typing `+exit+` or hitting
 `+ctrl-d+`
 
-[source,bash,run]
+[source,bash,subs="+macros,+attributes",role=copy]
 ----
 exit
 ----
@@ -48,14 +48,14 @@ registry to pull from.
 Now let’s run something in the background. First let’s see what happens
 if we run UBI in the background.
 
-[source,bash,run]
+[source,bash,subs="+macros,+attributes",role=copy]
 ----
 podman run -d registry.access.redhat.com/ubi9/ubi
 ----
 
 Ok, now let’s see if its running.
 
-[source,bash,run]
+[source,bash,subs="+macros,+attributes",role=copy]
 ----
 podman ps
 ----
@@ -72,7 +72,7 @@ we’re here to cover the basics.
 If you check `+podman ps -a+` you’ll find our new container there,
 stopped. Because it ran, and exited as it was supposed to.
 
-[source,bash,run]
+[source,bash,subs="+macros,+attributes",role=copy]
 ----
 podman ps -a
 ----
@@ -80,7 +80,7 @@ podman ps -a
 Instead, let’s run something that actually does something, and see how
 that works.
 
-[source,bash,run]
+[source,bash,subs="+macros,+attributes",role=copy]
 ----
 podman run -d --name my-httpd docker.io/httpd
 ----
@@ -92,7 +92,7 @@ Once a container is running it the background it might feel like you
 cant really interact with it, but you can! First let’s see what
 `+podman logs+` has to show us.
 
-[source,bash,run]
+[source,bash,subs="+macros,+attributes",role=copy]
 ----
 podman logs my-httpd
 ----
@@ -113,7 +113,7 @@ can run any executable that exists in the container. You can run
 `+bash+`, or `+ls+`, or most other bash built-ins. You can also run any
 utilities that have been baked into the container. Let’s try a few.
 
-[source,bash,run]
+[source,bash,subs="+macros,+attributes",role=copy]
 ----
 podman exec my-httpd ls /usr/local/apache2/htdocs
 ----
@@ -121,7 +121,7 @@ podman exec my-httpd ls /usr/local/apache2/htdocs
 Or, we can get a shell by invoking bash, but remember we want this one
 to run in our terminal, interactively.
 
-[source,bash,run]
+[source,bash,subs="+macros,+attributes",role=copy]
 ----
 podman exec -it my-httpd /bin/bash
 ----
@@ -135,7 +135,7 @@ than just sit there.
 
 Now, you'll want to exit from the shell in that container before pressing Next. 
 
-[source,bash,run]
+[source,bash,subs="+macros,+attributes",role=copy]
 ----
 exit
 ----
