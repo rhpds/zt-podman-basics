@@ -116,7 +116,8 @@ curl http://localhost:8080
 
 You should see the content of our super-businessy web-site! 
 
-....
+[source,text]
+----
 $ curl http://localhost:8080
 <html>
 <head>
@@ -126,5 +127,5 @@ Super Businessey
 </head>
 <h2>This is my super businessey web site</h2>
 </html>
-....
+----
 

@@ -12,9 +12,10 @@ podman run -it --rm registry.access.redhat.com/ubi9/ubi
 ----
 
 You should be brought into a new shell, that looks something like this:
-....
+[source,text]
+----
 [root@b5514553ad45 /]#
-....
+----
 
 Go ahead and poke around, you’ll find that it feels a lot like a very
 minimal linux system. And that’s because it is! The RHEL UBI is meant to
@@ -30,9 +31,10 @@ exit
 ----
 
 Let’s talk a little bit about the command you use to run that container.
-....
+[source,text]
+----
 podman run -it --rm registry.access.redhat.com/ubi9/ubi
-....
+----
 
 The `+-it+` argument tells podman to run this container with a terminal,
 and run it interactively (or, in the foreground).
@@ -67,13 +69,14 @@ podman ps
 ----
 
 It’s not there, is it?
-....
+[source,text]
+----
 $ podman run -d registry.access.redhat.com/ubi9/ubi
 c401adc17a7b1f5900359b4fcd182f5b4da21a960a4340bec479bb614eb7606f
 root@rhel:~# podman ps
 CONTAINER ID  IMAGE       COMMAND     CREATED     STATUS      PORTS       NAMES
 $
-....
+----
 
 Remember how I said UBI was meant to be a base for building containers?
 It’s not configured out of the box to actually run anything if you just
@@ -89,11 +92,12 @@ stopped. Because it ran, and exited as it was supposed to.
 ----
 podman ps -a
 ----
-....
+[source,text]
+----
 $ podman ps -a
 CONTAINER ID  IMAGE                                       COMMAND     CREATED        STATUS                    PORTS       NAMES
 c401adc17a7b  registry.access.redhat.com/ubi9/ubi:latest  /bin/bash   4 minutes ago  Exited (0) 4 minutes ago              wonderful_kirch
-....
+----
 
 Instead, let’s run something that actually does something, and see how
 that works.
@@ -105,11 +109,12 @@ podman run -d --name my-httpd docker.io/httpd
 
 Now, if we check `+podman ps+` we should see a new entry for our new
 container.
-....
+[source,text]
+----
 $ podman ps
 CONTAINER ID  IMAGE                           COMMAND           CREATED         STATUS         PORTS       NAMES
 9495ddeffdcb  docker.io/library/httpd:latest  httpd-foreground  10 seconds ago  Up 10 seconds  80/tcp      my-httpd
-....
+----
 
 Once a container is running it the background it might feel like you
 cant really interact with it, but you can! First let’s see what
@@ -122,13 +127,14 @@ podman logs my-httpd
 
 You should get the output from the apache httpd daemon that’s running in
 the container.
-....
+[source,text]
+----
 $ podman logs my-httpd
 AH00558: httpd: Could not reliably determine the server's fully qualified domain name, using 10.88.0.5. Set the 'ServerName' directive globally to suppress this message
 AH00558: httpd: Could not reliably determine the server's fully qualified domain name, using 10.88.0.5. Set the 'ServerName' directive globally to suppress this message
 [Mon Feb 03 23:23:16.730955 2025] [mpm_event:notice] [pid 1:tid 1] AH00489: Apache/2.4.63 (Unix) configured -- resuming normal operations
 [Mon Feb 03 23:23:16.731518 2025] [core:notice] [pid 1:tid 1] AH00094: Command line: 'httpd -D FOREGROUND'
-....
+----
 
 Commonly, when you run a process inside of a container, it’s not run by
 any sort of init system. It just runs as though you’d run it in the
