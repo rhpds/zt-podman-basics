@@ -26,7 +26,7 @@ You should see one image in the registry at this point:
 [source,text]
 ----
 NAME                               DESCRIPTION
-registry-xxx.domain/python-hostinfo
+registry-xxx.domain/hostinfo-app
 ----
 
 `podman search` works against any configured registry — the registry hostname prefix tells Podman where to search. You'll add a second image to this registry later in the module.
@@ -35,11 +35,11 @@ registry-xxx.domain/python-hostinfo
 
 Before you pull an image, it's useful to know something about it. Skopeo lets you inspect image metadata in a registry without downloading the image first.
 
-Let's find out what port the `python-hostinfo` application exposes:
+Let's find out what port the `hostinfo-app` application exposes:
 
 [source,bash,role=execute]
 ----
-skopeo inspect docker://${REGISTRY}/python-hostinfo | grep -A2 ExposedPorts
+skopeo inspect docker://${REGISTRY}/hostinfo-app | grep -A2 ExposedPorts
 ----
 
 You should see output like this:
@@ -60,23 +60,23 @@ The image exposes port 8000. You'll need to know this when running the container
 
 == Pull the Application Image
 
-Pull `python-hostinfo` from the local registry:
+Pull `hostinfo-app` from the local registry:
 
 [source,bash,role=execute]
 ----
-podman pull ${REGISTRY}/python-hostinfo
+podman pull ${REGISTRY}/hostinfo-app
 ----
 
 Each line starting with `Copying blob` is a filesystem layer being downloaded. Images are built in layers, not as a single monolithic file:
 
 [source,text]
 ----
-Trying to pull ${REGISTRY}/python-hostinfo:latest...
+Trying to pull ${REGISTRY}/hostinfo-app:latest...
 Getting image source signatures
 Copying blob a1b2c3d4e5f6 done   |
 Copying blob 7890abcdef12 done   |
 Writing manifest to image destination
-${REGISTRY}/python-hostinfo:latest
+${REGISTRY}/hostinfo-app:latest
 ----
 
 == Mirror UBI 9 to the Local Registry
@@ -118,7 +118,7 @@ The IMAGE ID is identical — `podman tag` created a new reference to the same i
 podman push ${REGISTRY}/ubi9
 ----
 
-Verify it's now available in the registry alongside `python-hostinfo`:
+Verify it's now available in the registry alongside `hostinfo-app`:
 
 [source,bash,role=execute]
 ----
@@ -164,7 +164,7 @@ podman images
 [source,text]
 ----
 REPOSITORY                        TAG         IMAGE ID      CREATED        SIZE
-${REGISTRY}/python-hostinfo  latest    a1b2c3d4e5f6  2 weeks ago   245 MB
+${REGISTRY}/hostinfo-app  latest    a1b2c3d4e5f6  2 weeks ago   245 MB
 ${REGISTRY}/ubi9             latest    7890abcdef12  3 weeks ago   212 MB
 ----
 
@@ -176,18 +176,18 @@ Now that the image is local, inspect it with `podman inspect` to confirm the sam
 
 [source,bash,role=execute]
 ----
-podman inspect ${REGISTRY}/python-hostinfo | grep -A2 ExposedPorts
+podman inspect ${REGISTRY}/hostinfo-app | grep -A2 ExposedPorts
 ----
 
 The output should match what skopeo showed earlier. This confirms that the image metadata is identical whether the image is sitting in the registry or cached locally — skopeo and podman both read from the same OCI image spec.
 
 == Examine Image Layers
 
-Images are built from stacked layers. Each layer represents a change — an added package, a copied file, an environment variable set. Look at the layer history for `python-hostinfo`:
+Images are built from stacked layers. Each layer represents a change — an added package, a copied file, an environment variable set. Look at the layer history for `hostinfo-app`:
 
 [source,bash,role=execute]
 ----
-podman history ${REGISTRY}/python-hostinfo
+podman history ${REGISTRY}/hostinfo-app
 ----
 
 [source,text]
@@ -200,7 +200,7 @@ a1b2c3d4e5f6  2 weeks ago   /bin/sh -c #(nop) CMD ["/usr/local/bin/g...   0 B
 ...
 ----
 
-Each row is a layer. The bottom rows are the base image layers; the top rows are what was added by the `python-hostinfo` build. The final image is all of these layers stacked together.
+Each row is a layer. The bottom rows are the base image layers; the top rows are what was added by the `hostinfo-app` build. The final image is all of these layers stacked together.
 
 [NOTE]
 ====

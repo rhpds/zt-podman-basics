@@ -4,11 +4,11 @@ Containers are ephemeral by design — they start from a clean image every time 
 
 == Run a Container Interactively
 
-Launch a shell inside the `python-hostinfo` container:
+Launch a shell inside the `hostinfo-app` container:
 
 [source,bash,role=execute]
 ----
-podman run -it --rm ${REGISTRY}/python-hostinfo /bin/bash
+podman run -it --rm ${REGISTRY}/hostinfo-app /bin/bash
 ----
 
 Your prompt will change to something like `root@a1b2c3d4e5f6:/#` — you're now inside the container. Let's unpack the flags:
@@ -32,7 +32,7 @@ ls /app
 cat /app/config.json
 ----
 
-This configuration file controls what `python-hostinfo` displays.
+This configuration file controls what `hostinfo-app` displays.
 
 == Check the User Context
 
@@ -46,7 +46,7 @@ whoami
 id
 ----
 
-The container runs as a non-root user (UID 65532), even though you launched Podman as root on the host. This is a security best practice — the `python-hostinfo` image was built to drop privileges, so a vulnerability in the application cannot be easily escalated to root access.
+The container runs as a non-root user (UID 65532), even though you launched Podman as root on the host. This is a security best practice — the `hostinfo-app` image was built to drop privileges, so a vulnerability in the application cannot be easily escalated to root access.
 
 == Inspect the Container Filesystem
 
@@ -100,14 +100,14 @@ First, confirm the file doesn't exist before you create it:
 
 [source,bash,role=execute]
 ----
-podman run --rm ${REGISTRY}/python-hostinfo cat /tmp/myfile.txt
+podman run --rm ${REGISTRY}/hostinfo-app cat /tmp/myfile.txt
 ----
 
 That errors — the file doesn't exist. Now create it inside a container:
 
 [source,bash,role=execute]
 ----
-podman run -it --rm ${REGISTRY}/python-hostinfo /bin/bash
+podman run -it --rm ${REGISTRY}/hostinfo-app /bin/bash
 ----
 
 Inside the container, create a file:
@@ -129,7 +129,7 @@ Now try to read it in a new container instance:
 
 [source,bash,role=execute]
 ----
-podman run --rm ${REGISTRY}/python-hostinfo cat /tmp/myfile.txt
+podman run --rm ${REGISTRY}/hostinfo-app cat /tmp/myfile.txt
 ----
 
 The file is gone. Each `podman run` creates a completely fresh container from the image — there is no shared state between runs unless you explicitly add it.
@@ -153,4 +153,4 @@ You've now completed the Podman Basics lab. You can:
 * Understand image layers and how tags work
 * Run containers interactively and observe filesystem isolation, process isolation, and ephemeral behavior
 
-The *zt-podman-deploy* lab picks up from here and covers running detached application containers, managing container lifecycle, and injecting configuration via volume mounts using the same `python-hostinfo` application.
+The *zt-podman-deploy* lab picks up from here and covers running detached application containers, managing container lifecycle, and injecting configuration via volume mounts using the same `hostinfo-app` application.
