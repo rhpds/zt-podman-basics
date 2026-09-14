@@ -26,13 +26,13 @@ REGISTRY_HOST="registry-${GUID}.${DOMAIN}"
 setup_ssl_registry "${REGISTRY_HOST}"
 echo "Registry up at ${REGISTRY_HOST}" >> /tmp/progress.log
 
-# Mirror python-hostinfo to the local registry
-podman pull ghcr.io/rhel-labs/python-hostinfo:latest
-podman tag ghcr.io/rhel-labs/python-hostinfo:latest "${REGISTRY_HOST}/python-hostinfo:latest"
-podman push "${REGISTRY_HOST}/python-hostinfo:latest"
-podman rmi ghcr.io/rhel-labs/python-hostinfo:latest
-podman rmi "${REGISTRY_HOST}/python-hostinfo:latest"
-echo "python-hostinfo mirrored to local registry" >> /tmp/progress.log
+# Mirror hostapp-info to the local registry
+podman pull ghcr.io/rhel-labs/hostapp-info:latest
+podman tag ghcr.io/rhel-labs/hostapp-info:latest "${REGISTRY_HOST}/hostapp-info:latest"
+podman push "${REGISTRY_HOST}/hostapp-info:latest"
+podman rmi ghcr.io/rhel-labs/hostapp-info:latest
+podman rmi "${REGISTRY_HOST}/hostapp-info:latest"
+echo "hostapp-info mirrored to local registry" >> /tmp/progress.log
 
 # Pull ubi9 into root storage but do NOT push to the local registry —
 # students mirror it as a tagging exercise in Module 2
