@@ -1,18 +1,20 @@
 ---
+
 antora:
   name: modules
   dir: www
   modules:
-    - name: "01-podman-cli"
-      label: "Podman Cli"
-      #solveButton: true
-    - name: "02-run-container"
-      label: "Run Container"
-      #solveButton: true
-    - name: "03-persistent-storage"
-      label: "Persistent Storage"
-      #solveButton: true
+    - name: module-01
+      label: "Podman Fundamentals"
+      solveButton: false
+    - name: module-02
+      label: "Working with a Registry"
+      solveButton: false
+    - name: module-03
+      label: "Interactive Containers"
+      solveButton: false
 
 tabs:
   - name: ">_ terminal"
     url: /wetty
+

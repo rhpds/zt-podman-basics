@@ -1,55 +1,49 @@
-!#/bin/bash
-LOG=/dev/null
+#!/bin/bash
+set -x
+trap 'echo "FATAL: setup failed at line ${LINENO}" >> /tmp/progress.log; exit 1' ERR
 
-#while [ ! -f /opt/instruqt/bootstrap/host-bootstrap-completed ]
-#do
-#   echo "Waiting for Instruqt to finish booting the VM"
-#   sleep 1
-#done
+echo "Adding wheel" > /root/post-run.log
+usermod -aG wheel rhel
 
-# Removed in PZ migration
-#yum remove -y google-rhui-client-rhel8.noarch
-#yum clean all
-#subscription-manager config --rhsm.manage_repos=1
-#subscription-manager register --activationkey=${ACTIVATION_KEY} --org=12451665 --force
+echo "Setup zt-podman-basics" > /tmp/progress.log
+chmod 666 /tmp/progress.log
 
-touch $LOG
+dnf -y remove katello-ca-consumer-* 2>/dev/null || true
+subscription-manager clean
+subscription-manager register --activationkey="${ACTIVATION_KEY}" --org="${ORG_ID}" --force
+dnf install -y git podman skopeo
 
-#echo "Installing Podman" >> $LOG
-#dnf -y install container-tools
-pushd /tmp
-sudo -u rhel podman pull docker.io/httpd
-sudo -u rhel podman pull registry.access.redhat.com/ubi9/ubi
-sudo -u rhel mkdir -p /home/rhel/my-httpd/html
-cat << EOF >> /home/rhel/my-httpd/html/index.html
-<html>
-<head>
-<title>
-Super Businessey
-</title>
-</head>
-<h2>This is my super businessey web site</h2>
-</html>
-EOF
-chown -R rhel:rhel /home/rhel/my-httpd
-popd
+LIBDIR=/tmp/lab-lib-$$
+git clone --depth=1 https://github.com/rhel-labs/lab-setup "${LIBDIR}"
+. "${LIBDIR}/common.sh"
 
-#Create a done file to signal we have finished
-touch ${LOG}.done
-n=1
-GREEN='\033[0;32m' 
-NC='\033[0m' # No Color
+echo "Packages installed" >> /tmp/progress.log
 
-while [ ! -f ${LOG}.done ] ;
-do
-      if test "$n" = "1"
-      then
-	    clear
-            n=$(( n+1 ))	 # increments $n
-      else
-	    printf "."
-      fi
-      sleep 2
-done
-clear
-echo -e "${GREEN}Ready to start your scenario${NC}"
+# --- lab configuration ---
+REGISTRY_HOST="registry-${GUID}.${DOMAIN}"
+# -------------------------
+
+setup_ssl_registry "${REGISTRY_HOST}"
+echo "Registry up at ${REGISTRY_HOST}" >> /tmp/progress.log
+
+# Mirror python-hostinfo to the local registry
+podman pull ghcr.io/rhel-labs/python-hostinfo:latest
+podman tag ghcr.io/rhel-labs/python-hostinfo:latest "${REGISTRY_HOST}/python-hostinfo:latest"
+podman push "${REGISTRY_HOST}/python-hostinfo:latest"
+podman rmi ghcr.io/rhel-labs/python-hostinfo:latest
+podman rmi "${REGISTRY_HOST}/python-hostinfo:latest"
+echo "python-hostinfo mirrored to local registry" >> /tmp/progress.log
+
+# Pull ubi9 into root storage but do NOT push to the local registry —
+# students mirror it as a tagging exercise in Module 2
+podman pull registry.access.redhat.com/ubi9/ubi:latest
+echo "ubi9 staged in root storage for Module 2 exercise" >> /tmp/progress.log
+
+add_local_host "${REGISTRY_HOST}"
+
+persist_env_var REGISTRY "${REGISTRY_HOST}"
+
+cleanup_subscription
+cleanup_certbot
+cleanup_tmpfiles
+echo "Setup complete" >> /tmp/progress.log

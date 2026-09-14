@@ -1,17 +1,15 @@
 ---
 site:
-  title: "Learn some container basics with Podman."
+  title: "Podman Basics"
   url: https://github.com/rhpds/showroom_template_zero
-  start_page: modules::01-podman-cli.adoc
-
+  start_page: modules::module-01.adoc
 content:
   sources:
     - url: ./
       start_path: content
-
 ui:
   bundle:
-    url: https://github.com/rhpds/nookbag-bundle/releases/download/v0.0.2/bundle.zip
+    url: https://github.com/rhpds/nookbag-bundle/releases/download/v0.0.3/ui-bundle.zip
     snapshot: true
 
 output:

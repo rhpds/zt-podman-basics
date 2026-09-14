@@ -1,0 +1,156 @@
+= Interactive Containers
+
+Containers are ephemeral by design — they start from a clean image every time and leave nothing behind when they stop. In this module you'll explore what that means from inside a running container.
+
+== Run a Container Interactively
+
+Launch a shell inside the `python-hostinfo` container:
+
+[source,bash,role=execute]
+----
+podman run -it --rm ${REGISTRY}/python-hostinfo /bin/bash
+----
+
+Your prompt will change to something like `root@a1b2c3d4e5f6:/#` — you're now inside the container. Let's unpack the flags:
+
+* `-i` — interactive: keep STDIN open so you can type commands
+* `-t` — allocate a pseudo-TTY (terminal), so you get a proper shell prompt
+* `--rm` — automatically remove the container when it exits
+* `/bin/bash` — override the default CMD; run bash instead of the application
+
+== Explore the Container Filesystem
+
+The application files are at `/app`:
+
+[source,bash,role=execute]
+----
+ls /app
+----
+
+[source,bash,role=execute]
+----
+cat /app/config.json
+----
+
+This configuration file controls what `python-hostinfo` displays.
+
+== Check the User Context
+
+[source,bash,role=execute]
+----
+whoami
+----
+
+[source,bash,role=execute]
+----
+id
+----
+
+The container runs as a non-root user (UID 65532), even though you launched Podman as root on the host. This is a security best practice — the `python-hostinfo` image was built to drop privileges, so a vulnerability in the application cannot be easily escalated to root access.
+
+== Inspect the Container Filesystem
+
+[source,bash,role=execute]
+----
+df -hP
+----
+
+[source,bash,role=execute]
+----
+mount | grep overlay
+----
+
+The root filesystem (`/`) is an overlay filesystem. Overlay mounts a read-only base (the image layers) with a thin writable layer on top. Anything you write inside the container goes into that writable layer — and disappears when the container is removed.
+
+[NOTE]
+====
+`tmpfs` mounts are RAM-backed temporary filesystems. `/tmp`, `/run`, and similar paths in containers are often tmpfs — again, no persistence.
+====
+
+== Process Isolation
+
+[source,bash,role=execute]
+----
+ps aux
+----
+
+You should see only a small number of processes — bash and ps itself. The host's processes are invisible. Each container gets its own PID namespace, so it cannot see or signal processes running outside its boundary.
+
+== Exit and Verify Ephemeral Behavior
+
+[source,bash,role=execute]
+----
+exit
+----
+
+Back on the host, check for running containers:
+
+[source,bash,role=execute]
+----
+podman ps
+----
+
+The container is gone. `--rm` cleaned it up on exit. Nothing persisted.
+
+== Demonstrate the Ephemeral Filesystem
+
+Run a container that creates a file, then verify the file doesn't exist in a fresh container:
+
+First, confirm the file doesn't exist before you create it:
+
+[source,bash,role=execute]
+----
+podman run --rm ${REGISTRY}/python-hostinfo cat /tmp/myfile.txt
+----
+
+That errors — the file doesn't exist. Now create it inside a container:
+
+[source,bash,role=execute]
+----
+podman run -it --rm ${REGISTRY}/python-hostinfo /bin/bash
+----
+
+Inside the container, create a file:
+
+[source,bash,role=execute]
+----
+echo "test data" > /tmp/myfile.txt
+cat /tmp/myfile.txt
+----
+
+The file is there. Exit:
+
+[source,bash,role=execute]
+----
+exit
+----
+
+Now try to read it in a new container instance:
+
+[source,bash,role=execute]
+----
+podman run --rm ${REGISTRY}/python-hostinfo cat /tmp/myfile.txt
+----
+
+The file is gone. Each `podman run` creates a completely fresh container from the image — there is no shared state between runs unless you explicitly add it.
+
+[source,bash,role=execute]
+----
+podman ps -a
+----
+
+No containers listed. `--rm` removed them all on exit.
+
+[TIP]
+====
+This ephemeral behavior is a core container design principle. For configuration that needs to survive across container runs, you'll use volume mounts. For data that needs to persist, you'll use named volumes or bind mounts. Both are covered in the zt-podman-deploy lab.
+====
+
+You've now completed the Podman Basics lab. You can:
+
+* Verify Podman installation and understand its CLI structure
+* Pull images from a registry and inspect image metadata with both skopeo and podman
+* Understand image layers and how tags work
+* Run containers interactively and observe filesystem isolation, process isolation, and ephemeral behavior
+
+The *zt-podman-deploy* lab picks up from here and covers running detached application containers, managing container lifecycle, and injecting configuration via volume mounts using the same `python-hostinfo` application.

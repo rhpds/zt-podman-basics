@@ -1,14 +1,41 @@
 ---
 virtualmachines:
   - name: "rhel"
-    image: "rhel-9.5"
+    image: "rhel-10-2-eus-06-08-26"
+    bootloader: efi
     memory: "4G"
-    cores: 1
+    cores: 2
     image_size: "40G"
-    packages:
-      - container-tools
     tags:
       - key: "AnsibleGroup"
         value: "bastions"
     networks:
       - default
+    packages:
+      - container-tools
+      - skopeo
+    services:
+      - name: registry-http
+        ports:
+          - port: 80
+            protocol: TCP
+            targetPort: 80
+            name: registry-http
+      - name: registry
+        ports:
+          - port: 443
+            protocol: TCP
+            targetPort: 443
+            name: registry
+    routes:
+      - name: registry-http
+        host: registry
+        service: registry-http
+        targetPort: 80
+        tls: false
+        path: "/.well-known/"
+      - name: registry
+        host: registry
+        service: registry
+        targetPort: 443
+        tls: true

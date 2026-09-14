@@ -1,0 +1,211 @@
+= Working with a Container Registry
+
+A container registry is a centralized store for container images. Think of it like a package repository for containers — you pull images from it to run locally, and push images to it to share with others.
+
+== Registry Types
+
+There are several types of registries you'll encounter in practice:
+
+* **Public registries** — open to anyone: `docker.io`, `ghcr.io`, `quay.io`, `registry.access.redhat.com`
+* **Private enterprise registries** — access-controlled, often used in production and air-gapped environments
+* **Local registries** — running on the same network or machine, useful for development, testing, and disconnected environments
+
+This lab uses a **local registry** running on this system. The registry hostname is stored in the `REGISTRY` environment variable in your terminal. It uses SSL (so all traffic is HTTPS) and requires no authentication — you can pull and push without logging in.
+
+== Search the Registry
+
+Before pulling an image, use `podman search` to discover what's available in the local registry.
+
+[source,bash,role=execute]
+----
+podman search ${REGISTRY}/
+----
+
+You should see one image in the registry at this point:
+
+[source,text]
+----
+NAME                               DESCRIPTION
+registry-xxx.domain/python-hostinfo
+----
+
+`podman search` works against any configured registry — the registry hostname prefix tells Podman where to search. You'll add a second image to this registry later in the module.
+
+== Inspect a Remote Image with Skopeo
+
+Before you pull an image, it's useful to know something about it. Skopeo lets you inspect image metadata in a registry without downloading the image first.
+
+Let's find out what port the `python-hostinfo` application exposes:
+
+[source,bash,role=execute]
+----
+skopeo inspect docker://${REGISTRY}/python-hostinfo | grep -A2 ExposedPorts
+----
+
+You should see output like this:
+
+[source,text]
+----
+        "ExposedPorts": {
+            "8000/tcp": {}
+        },
+----
+
+The image exposes port 8000. You'll need to know this when running the container — Podman doesn't automatically publish ports, so you have to explicitly map them.
+
+[TIP]
+====
+`skopeo inspect` reads image metadata directly from the registry API. This is faster than pulling the whole image just to check its configuration, and it works even when the registry requires authentication for pulls.
+====
+
+== Pull the Application Image
+
+Pull `python-hostinfo` from the local registry:
+
+[source,bash,role=execute]
+----
+podman pull ${REGISTRY}/python-hostinfo
+----
+
+Each line starting with `Copying blob` is a filesystem layer being downloaded. Images are built in layers, not as a single monolithic file:
+
+[source,text]
+----
+Trying to pull ${REGISTRY}/python-hostinfo:latest...
+Getting image source signatures
+Copying blob a1b2c3d4e5f6 done   |
+Copying blob 7890abcdef12 done   |
+Writing manifest to image destination
+${REGISTRY}/python-hostinfo:latest
+----
+
+== Mirror UBI 9 to the Local Registry
+
+`ubi9` is already in local storage — it was pulled during lab setup so this exercise doesn't require internet access. Mirroring it to the local registry is a two-step operation: tag the image with the new registry reference, then push.
+
+Check what's in local storage:
+
+[source,bash,role=execute]
+----
+podman images
+----
+
+Tag the image for the local registry:
+
+[source,bash,role=execute]
+----
+podman tag registry.access.redhat.com/ubi9/ubi ${REGISTRY}/ubi9
+----
+
+Now check `podman images` — both references exist and share the same IMAGE ID:
+
+[source,bash,role=execute]
+----
+podman images
+----
+
+[source,text]
+----
+REPOSITORY                           TAG      IMAGE ID      CREATED      SIZE
+registry.access.redhat.com/ubi9/ubi  latest   a1b2c3d4e5f6  3 weeks ago  212 MB
+${REGISTRY}/ubi9                     latest   a1b2c3d4e5f6  3 weeks ago  212 MB
+----
+
+The IMAGE ID is identical — `podman tag` created a new reference to the same image content, not a copy. Push the local registry reference:
+
+[source,bash,role=execute]
+----
+podman push ${REGISTRY}/ubi9
+----
+
+Verify it's now available in the registry alongside `python-hostinfo`:
+
+[source,bash,role=execute]
+----
+podman search ${REGISTRY}/
+----
+
+The image is mirrored locally. Remove the public registry reference — it's no longer needed:
+
+[source,bash,role=execute]
+----
+podman rmi registry.access.redhat.com/ubi9/ubi
+----
+
+[source,text]
+----
+Untagged: registry.access.redhat.com/ubi9/ubi:latest
+----
+
+Notice **Untagged**, not **Deleted** — the `${REGISTRY}/ubi9` reference still exists, so the image data is retained. Confirm:
+
+[source,bash,role=execute]
+----
+podman images
+----
+
+[source,text]
+----
+REPOSITORY         TAG      IMAGE ID      CREATED      SIZE
+${REGISTRY}/ubi9   latest   a1b2c3d4e5f6  3 weeks ago  212 MB
+----
+
+Same IMAGE ID, local reference intact.
+
+== Verify the Local Image Cache
+
+Confirm both images are now in your local cache:
+
+[source,bash,role=execute]
+----
+podman images
+----
+
+[source,text]
+----
+REPOSITORY                        TAG         IMAGE ID      CREATED        SIZE
+${REGISTRY}/python-hostinfo  latest    a1b2c3d4e5f6  2 weeks ago   245 MB
+${REGISTRY}/ubi9             latest    7890abcdef12  3 weeks ago   212 MB
+----
+
+Notice the full registry path in the REPOSITORY column. That's where Podman will push this image if you run `podman push` — it remembers where each image came from.
+
+== Inspect a Local Image
+
+Now that the image is local, inspect it with `podman inspect` to confirm the same port metadata you found with skopeo:
+
+[source,bash,role=execute]
+----
+podman inspect ${REGISTRY}/python-hostinfo | grep -A2 ExposedPorts
+----
+
+The output should match what skopeo showed earlier. This confirms that the image metadata is identical whether the image is sitting in the registry or cached locally — skopeo and podman both read from the same OCI image spec.
+
+== Examine Image Layers
+
+Images are built from stacked layers. Each layer represents a change — an added package, a copied file, an environment variable set. Look at the layer history for `python-hostinfo`:
+
+[source,bash,role=execute]
+----
+podman history ${REGISTRY}/python-hostinfo
+----
+
+[source,text]
+----
+ID            CREATED       CREATED BY                                     SIZE        COMMENT
+a1b2c3d4e5f6  2 weeks ago   /bin/sh -c #(nop) CMD ["/usr/local/bin/g...   0 B
+<missing>     2 weeks ago   /bin/sh -c pip install --no-cache-dir guni...   35.4 MB
+<missing>     2 weeks ago   /bin/sh -c pip install --no-cache-dir -r r...   12.1 MB
+<missing>     2 weeks ago   /bin/sh -c #(nop) COPY dir:... in /app/     3.2 kB
+...
+----
+
+Each row is a layer. The bottom rows are the base image layers; the top rows are what was added by the `python-hostinfo` build. The final image is all of these layers stacked together.
+
+[NOTE]
+====
+When you pull an image that shares layers with one you already have, Podman skips downloading those shared layers. This is why pulling a second image from the same base is much faster than the first.
+====
+
+
+In the next module, you'll run a container interactively and explore the container's filesystem from the inside.
