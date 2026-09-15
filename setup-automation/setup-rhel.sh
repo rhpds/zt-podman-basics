@@ -34,9 +34,8 @@ skopeo copy \
 
 echo "${IMAGE_TGT} mirrored to local registry" >> /tmp/progress.log
 
-# Pull ubi9 into root storage but do NOT push to the local registry —
-# students mirror it as a tagging exercise in Module 2
-podman pull registry.access.redhat.com/ubi9/ubi:latest
+# Pull ubi9 for mirroring exercise
+runuser -l rhel -c "podman pull registry.access.redhat.com/ubi9/ubi:latest"
 echo "ubi9 staged in root storage for Module 2 exercise" >> /tmp/progress.log
 
 add_local_host "${REGISTRY_HOST}"
