@@ -35,8 +35,8 @@ skopeo copy \
 echo "${IMAGE_TGT} mirrored to local registry" >> /tmp/progress.log
 
 # Pull ubi9 for mirroring exercise
-runuser -l rhel -c "podman pull registry.access.redhat.com/ubi9/ubi:latest"
-echo "ubi9 staged in root storage for Module 2 exercise" >> /tmp/progress.log
+pull_public_images rhel registry.access.redhat.com/ubi9/ubi:latest
+echo "ubi9 staged in rhel user storage for mirroring exercise" >> /tmp/progress.log
 
 add_local_host "${REGISTRY_HOST}"
 
