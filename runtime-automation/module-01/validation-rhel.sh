@@ -1,8 +1,12 @@
 #!/bin/sh
-echo "Validating module-01 (stub)" >> /tmp/progress.log
+echo "Validating module-01" >> /tmp/progress.log
 
-# Phase 1 stub — exits 0 to allow navigation during environment development.
-# Real validation will confirm: podman installed, local image cache empty.
+# Validation pattern: check each objective, exit 1 with FAIL/HINT on first failure.
+# if ! some-check; then
+#     echo "FAIL: what failed and why it matters"
+#     echo "HINT: what the participant should try to fix it"
+#     exit 1
+# fi
 
-echo "PASS: module-01 stub validation" >> /tmp/progress.log
-exit 0
+# echo "PASS: module-01 objectives verified"
+# exit 0

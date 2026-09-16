@@ -1,10 +1,10 @@
 = Podman Fundamentals
 
-Podman is an OCI-compliant, daemonless container engine for developing, managing, and running containers on Linux. Unlike Docker, Podman has no central daemon — each container runs as a child process of the command that started it.
+Podman is a daemonless container engine for Linux. There is no background service managing containers — each container runs directly as a process on the host, started and owned by the Podman command that launched it.
 
-Podman is Docker CLI-compatible, meaning the vast majority of `docker` commands work as `podman` commands with no changes. It also supports both rootless mode (containers running as a regular user) and rootful mode (containers running as root), giving you flexibility in how you manage privilege.
+Podman can run in two modes. In rootless mode, containers run within your user account's privileges — access to system resources is limited to what a regular user can do. In rootful mode, containers have access to the full range of system capabilities: binding privileged ports, accessing host devices, manipulating network interfaces.
 
-In this lab you are working as root, which is the pattern for the ZeroTouch labs environment.
+In this lab you are working as the `rhel` user. Podman is running in rootless mode — images and containers are managed without root privileges, using your user's own storage and configuration.
 
 == Verify the Podman Installation
 
@@ -24,16 +24,25 @@ podman version 5.x.x
 
 Podman 5.x is the current major version on RHEL 10. The version string follows `major.minor.patch` — expect at least version 5 here.
 
-== List Available Images
+== Rootless and Rootful Storage
 
-The local image cache is where Podman stores images you have pulled. Let's see what's there.
+Rootless and rootful Podman use completely separate image stores. As the `rhel` user, your images are stored in your home directory under `~/.local/share/containers/storage/`. Rootful Podman uses the system store at `/var/lib/containers/storage/`. The two are independent — pulling an image as `rhel` makes it visible only to `rhel`'s Podman.
+
+User-level Podman configuration lives here:
+
+[source,bash,role=execute]
+----
+ls ~/.config/containers/
+----
+
+System-wide defaults are in `/etc/containers/`. For rootless operations, Podman checks your user config first, then falls back to the system config.
+
+Check what images are in your store:
 
 [source,bash,role=execute]
 ----
 podman images
 ----
-
-You should see one image already present:
 
 [source,text]
 ----
@@ -41,13 +50,27 @@ REPOSITORY                             TAG         IMAGE ID      CREATED       S
 registry.access.redhat.com/ubi9/ubi   latest      a1b2c3d4e5f6  3 weeks ago   212 MB
 ----
 
-This image was pulled during lab setup and will be used in the next module. The columns here tell you:
+This image was pulled during lab setup. The columns:
 
 * **REPOSITORY** — where the image came from (registry path and name)
 * **TAG** — version label on the image
 * **IMAGE ID** — content-addressed hash (first 12 characters)
 * **CREATED** — when the image was built
 * **SIZE** — uncompressed size on disk
+
+Now check the system store:
+
+[source,bash,role=execute]
+----
+sudo podman images
+----
+
+[source,text]
+----
+REPOSITORY   TAG   IMAGE ID   CREATED   SIZE
+----
+
+The system store is empty. Same host, same Podman binary, different stores — rootless images live in your home directory, system images live in `/var/lib/containers/storage/`. An image pulled as `rhel` is not available to system containers, and images in the system store are not visible to your rootless Podman.
 
 == Check Running Containers
 
@@ -79,16 +102,11 @@ The `ps` columns are:
 
 == Images vs Containers
 
-Before moving on, a key conceptual distinction:
+Before moving on, a key distinction you'll use throughout this lab:
 
-* An **image** is a read-only template — a blueprint. It contains the filesystem layers, configuration, and metadata that define what a container will look like when it starts.
-* A **container** is a running instance created from an image. It has its own writable layer on top of the read-only image layers.
+* An **image** is stored content — a stack of filesystem layers plus metadata describing how to run it. Images are what you pull from registries and what `podman images` lists.
+* A **container** is a running instance of an image — a process on the host, isolated from the host and other containers, with a thin writable layer on top of the image's read-only content. Containers are what `podman ps` tracks.
 
-If you think in object-oriented terms: the image is the class, the container is the object.
-
-[NOTE]
-====
-You can run many containers from the same image simultaneously. Each container gets its own writable layer but shares the underlying read-only image layers. This is what makes containers lightweight compared to virtual machines.
-====
+One image can produce many containers simultaneously. Each gets its own isolation and its own writable layer, but they all read from the same underlying image content.
 
 In the next module you will pull images from the local container registry and begin working with them.

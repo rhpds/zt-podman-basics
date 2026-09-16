@@ -1,104 +1,131 @@
 = Working with a Container Registry
 
-A container registry is a centralized store for container images. Think of it like a package repository for containers — you pull images from it to run locally, and push images to it to share with others.
+A container image is a stack of compressed filesystem snapshots bundled with metadata that describes how to run them. A registry stores and serves those bundles — you refer to them by name, but what you're actually getting is addressed by a content hash. Local operations like tagging and retagging leave that hash unchanged. Registry operations like push and pull can produce a different digest even for identical content.
 
 == Registry Types
 
-There are several types of registries you'll encounter in practice:
+Registries come in a few varieties:
 
 * **Public registries** — open to anyone: `docker.io`, `ghcr.io`, `quay.io`, `registry.access.redhat.com`
-* **Private enterprise registries** — access-controlled, often used in production and air-gapped environments
-* **Local registries** — running on the same network or machine, useful for development, testing, and disconnected environments
+* **Private enterprise registries** — access-controlled, used in production and air-gapped environments
+* **Local registries** — running on the same network or machine, for development, testing, and disconnected environments
 
-This lab uses a **local registry** running on this system. The registry hostname is stored in the `REGISTRY` environment variable in your terminal. It uses SSL (so all traffic is HTTPS) and requires no authentication — you can pull and push without logging in.
+This lab uses a **local registry** running on this system. The registry hostname is stored in the `REGISTRY` environment variable. It uses SSL and requires no authentication.
 
 == Search the Registry
 
-Before pulling an image, use `podman search` to discover what's available in the local registry.
+Discover what images are available:
 
 [source,bash,role=execute]
 ----
 podman search ${REGISTRY}/
 ----
 
-You should see one image in the registry at this point:
-
 [source,text]
 ----
 NAME                               DESCRIPTION
-registry-xxx.domain/hostinfo-app
+registry-xxx.example.com/hostinfo-app
 ----
 
-`podman search` works against any configured registry — the registry hostname prefix tells Podman where to search. You'll add a second image to this registry later in the module.
+One image is available. You'll add a second later in this module.
 
-== Inspect a Remote Image with Skopeo
+== Inspect Before You Pull
 
-Before you pull an image, it's useful to know something about it. Skopeo lets you inspect image metadata in a registry without downloading the image first.
-
-Let's find out what port the `hostinfo-app` application exposes:
+Before downloading an image, use `skopeo` to read its metadata directly from the registry — without pulling a single byte.
 
 [source,bash,role=execute]
 ----
-skopeo inspect docker://${REGISTRY}/hostinfo-app | grep -A2 ExposedPorts
+skopeo inspect docker://${REGISTRY}/hostinfo-app | grep -A7 '"Env"'
 ----
-
-You should see output like this:
 
 [source,text]
 ----
-        "ExposedPorts": {
-            "8000/tcp": {}
-        },
+    "Env": [
+        "HOME=/tmp",
+        "CONTAINER_DEFAULT_USER=65532",
+        "PYTHON_VERSION=3.11.15",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "PYTHONUNBUFFERED=1",
+        "PATH=/app/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    ],
 ----
 
-The image exposes port 8000. You'll need to know this when running the container — Podman doesn't automatically publish ports, so you have to explicitly map them.
+Before pulling, you already know:
 
-[TIP]
-====
-`skopeo inspect` reads image metadata directly from the registry API. This is faster than pulling the whole image just to check its configuration, and it works even when the registry requires authentication for pulls.
-====
+* The container will run as UID 65532 — not root
+* It's a Python 3.11 runtime
+* The application lives in `/app/venv`, which is first on the PATH
 
-== Pull the Application Image
+This is part of the metadata bundled with the image. Skopeo reads it straight from the registry API, which makes it useful for auditing images before pulling them in automated pipelines or air-gapped environments where you want to verify before committing to a download.
 
-Pull `hostinfo-app` from the local registry:
+== Pull the Image
 
 [source,bash,role=execute]
 ----
 podman pull ${REGISTRY}/hostinfo-app
 ----
 
-Each line starting with `Copying blob` is a filesystem layer being downloaded. Images are built in layers, not as a single monolithic file:
-
 [source,text]
 ----
-Trying to pull ${REGISTRY}/hostinfo-app:latest...
+Trying to pull registry-xxx.example.com/hostinfo-app:latest...
 Getting image source signatures
 Copying blob a1b2c3d4e5f6 done   |
 Copying blob 7890abcdef12 done   |
+Copying blob fedcba098765 done   |
+...
 Writing manifest to image destination
-${REGISTRY}/hostinfo-app:latest
+registry-xxx.example.com/hostinfo-app:latest
 ----
 
-== Mirror UBI 9 to the Local Registry
+Each `Copying blob` line is a layer — a compressed filesystem tarball being fetched. Layers are identified by their digest, which means if you already have a layer from a prior pull, Podman skips it. Pulling a second image built on the same base is much faster because the shared base layers are already local.
 
-`ubi9` is already in local storage — it was pulled during lab setup so this exercise doesn't require internet access. Mirroring it to the local registry is a two-step operation: tag the image with the new registry reference, then push.
+== Examine the Layers
 
-Check what's in local storage:
+[source,bash,role=execute]
+----
+podman history ${REGISTRY}/hostinfo-app
+----
+
+[source,text]
+----
+ID            CREATED        CREATED BY                                     SIZE
+a1b2c3d4e5f6  8 weeks ago    /bin/sh -c #(nop) CMD ["/app/venv/bin/gu...  0 B
+<missing>     8 weeks ago    /bin/sh -c #(nop) COPY dir:a1b2 in /app/      7.1 kB
+<missing>     8 weeks ago    /bin/sh -c pip install --no-cache-dir -r ...   45.2 MB
+<missing>     8 weeks ago    /bin/sh -c #(nop) WORKDIR /app                 0 B
+<missing>     2 months ago   /bin/sh -c dnf install -y python3.11 ...       312 MB
+...
+----
+
+The output is long — this image has over 30 layers. The `<missing>` image ID is normal for pulled images: intermediate layer IDs aren't stored locally, only the final image's ID. What you can read is the CREATED BY column — it shows the instruction that produced each layer. The top rows are application steps: the default command set, files copied in, packages installed. Further down are the base image layers: the Python runtime, OS packages, system libraries.
+
+Each row is one filesystem snapshot stacked on the previous. The final image is all of them in order, read-only. When you run a container, a thin writable layer is added on top — but the image layers themselves never change.
+
+== Names Are Metadata
+
+The IMAGE ID is derived from the content of the image — it's a hash of the layer digests. For local operations like tagging and retagging, the IMAGE ID stays the same because the content hasn't changed. You can add names, remove names, and the underlying layers don't move.
+
+`ubi9` is already in local storage from lab setup. Look at its IMAGE ID:
 
 [source,bash,role=execute]
 ----
 podman images
 ----
 
-Tag the image for the local registry:
+[source,text]
+----
+REPOSITORY                             TAG      IMAGE ID      CREATED       SIZE
+registry.access.redhat.com/ubi9/ubi   latest   a1b2c3d4e5f6  3 weeks ago   212 MB
+${REGISTRY}/hostinfo-app              latest   7890abcdef12  2 weeks ago   245 MB
+----
+
+Add a new name pointing to the same content — a reference for the local registry:
 
 [source,bash,role=execute]
 ----
 podman tag registry.access.redhat.com/ubi9/ubi ${REGISTRY}/ubi9
 ----
 
-Now check `podman images` — both references exist and share the same IMAGE ID:
-
 [source,bash,role=execute]
 ----
 podman images
@@ -106,26 +133,27 @@ podman images
 
 [source,text]
 ----
-REPOSITORY                           TAG      IMAGE ID      CREATED      SIZE
-registry.access.redhat.com/ubi9/ubi  latest   a1b2c3d4e5f6  3 weeks ago  212 MB
-${REGISTRY}/ubi9                     latest   a1b2c3d4e5f6  3 weeks ago  212 MB
+REPOSITORY                             TAG      IMAGE ID      CREATED       SIZE
+registry.access.redhat.com/ubi9/ubi   latest   a1b2c3d4e5f6  3 weeks ago   212 MB
+${REGISTRY}/ubi9                       latest   a1b2c3d4e5f6  3 weeks ago   212 MB
+${REGISTRY}/hostinfo-app              latest   7890abcdef12  2 weeks ago   245 MB
 ----
 
-The IMAGE ID is identical — `podman tag` created a new reference to the same image content, not a copy. Push the local registry reference:
+Same IMAGE ID — `podman tag` added a name, not a copy. Push it to the local registry:
 
 [source,bash,role=execute]
 ----
 podman push ${REGISTRY}/ubi9
 ----
 
-Verify it's now available in the registry alongside `hostinfo-app`:
+Verify it's in the registry alongside `hostinfo-app`:
 
 [source,bash,role=execute]
 ----
 podman search ${REGISTRY}/
 ----
 
-The image is mirrored locally. Remove the public registry reference — it's no longer needed:
+Now remove the original public registry reference:
 
 [source,bash,role=execute]
 ----
@@ -137,7 +165,7 @@ podman rmi registry.access.redhat.com/ubi9/ubi
 Untagged: registry.access.redhat.com/ubi9/ubi:latest
 ----
 
-Notice **Untagged**, not **Deleted** — the `${REGISTRY}/ubi9` reference still exists, so the image data is retained. Confirm:
+**Untagged**, not **Deleted**. The content is still present because `${REGISTRY}/ubi9` still references it. A name is a pointer to content — removing the pointer doesn't remove what it pointed at.
 
 [source,bash,role=execute]
 ----
@@ -146,66 +174,29 @@ podman images
 
 [source,text]
 ----
-REPOSITORY         TAG      IMAGE ID      CREATED      SIZE
-${REGISTRY}/ubi9   latest   a1b2c3d4e5f6  3 weeks ago  212 MB
+REPOSITORY             TAG      IMAGE ID      CREATED       SIZE
+${REGISTRY}/ubi9       latest   a1b2c3d4e5f6  3 weeks ago   212 MB
+${REGISTRY}/hostinfo-app  latest  7890abcdef12  2 weeks ago   245 MB
 ----
 
-Same IMAGE ID, local reference intact.
+Same IMAGE ID. The content never moved.
 
-== Verify the Local Image Cache
+== What the Image Declares
 
-Confirm both images are now in your local cache:
-
-[source,bash,role=execute]
-----
-podman images
-----
-
-[source,text]
-----
-REPOSITORY                        TAG         IMAGE ID      CREATED        SIZE
-${REGISTRY}/hostinfo-app  latest    a1b2c3d4e5f6  2 weeks ago   245 MB
-${REGISTRY}/ubi9             latest    7890abcdef12  3 weeks ago   212 MB
-----
-
-Notice the full registry path in the REPOSITORY column. That's where Podman will push this image if you run `podman push` — it remembers where each image came from.
-
-== Inspect a Local Image
-
-Now that the image is local, inspect it with `podman inspect` to confirm the same port metadata you found with skopeo:
+`skopeo` showed you the runtime environment before the pull. Now check what the image declares about how it expects to be run:
 
 [source,bash,role=execute]
 ----
 podman inspect ${REGISTRY}/hostinfo-app | grep -A2 ExposedPorts
 ----
 
-The output should match what skopeo showed earlier. This confirms that the image metadata is identical whether the image is sitting in the registry or cached locally — skopeo and podman both read from the same OCI image spec.
-
-== Examine Image Layers
-
-Images are built from stacked layers. Each layer represents a change — an added package, a copied file, an environment variable set. Look at the layer history for `hostinfo-app`:
-
-[source,bash,role=execute]
-----
-podman history ${REGISTRY}/hostinfo-app
-----
-
 [source,text]
 ----
-ID            CREATED       CREATED BY                                     SIZE        COMMENT
-a1b2c3d4e5f6  2 weeks ago   /bin/sh -c #(nop) CMD ["/usr/local/bin/g...   0 B
-<missing>     2 weeks ago   /bin/sh -c pip install --no-cache-dir guni...   35.4 MB
-<missing>     2 weeks ago   /bin/sh -c pip install --no-cache-dir -r r...   12.1 MB
-<missing>     2 weeks ago   /bin/sh -c #(nop) COPY dir:... in /app/     3.2 kB
-...
+        "ExposedPorts": {
+            "8000/tcp": {}
+        },
 ----
 
-Each row is a layer. The bottom rows are the base image layers; the top rows are what was added by the `hostinfo-app` build. The final image is all of these layers stacked together.
+The image declares it expects to be reachable on port 8000. This is metadata set by the image author — it's not enforced automatically, but it's the contract the image publishes. You'll need this when you map container ports to the host.
 
-[NOTE]
-====
-When you pull an image that shares layers with one you already have, Podman skips downloading those shared layers. This is why pulling a second image from the same base is much faster than the first.
-====
-
-
-In the next module, you'll run a container interactively and explore the container's filesystem from the inside.
+In the next module you'll run `hostinfo-app` interactively and see what its isolation looks like from the inside.

@@ -1,6 +1,6 @@
 = Interactive Containers
 
-Containers are ephemeral by design — they start from a clean image every time and leave nothing behind when they stop. In this module you'll explore what that means from inside a running container.
+A container gives an application its own view of the system — its own filesystem, users, and processes — while sharing the host's kernel. In this module you'll explore that isolation from inside a running container, then observe the same container from the host.
 
 == Run a Container Interactively
 
@@ -11,16 +11,16 @@ Launch a shell inside the `hostinfo-app` container:
 podman run -it --rm ${REGISTRY}/hostinfo-app /bin/bash
 ----
 
-Your prompt will change to something like `root@a1b2c3d4e5f6:/#` — you're now inside the container. Let's unpack the flags:
+Your prompt changes to something like `root@a1b2c3d4e5f6:/#` — you're inside the container. The flags:
 
 * `-i` — interactive: keep STDIN open so you can type commands
-* `-t` — allocate a pseudo-TTY (terminal), so you get a proper shell prompt
-* `--rm` — automatically remove the container when it exits
+* `-t` — allocate a pseudo-TTY so you get a proper shell prompt
+* `--rm` — remove the container when it exits
 * `/bin/bash` — override the default CMD; run bash instead of the application
 
-== Explore the Container Filesystem
+== The Application Environment
 
-The application files are at `/app`:
+The container exists to run `hostinfo-app`. Its files are at `/app`:
 
 [source,bash,role=execute]
 ----
@@ -32,9 +32,18 @@ ls /app
 cat /app/config.json
 ----
 
-This configuration file controls what `hostinfo-app` displays.
+This is the application's configuration. It's part of the image — present every time a container starts from this image.
 
-== Check the User Context
+== Filesystem Scope
+
+[source,bash,role=execute]
+----
+df -hP
+----
+
+You'll see the container's root filesystem and a handful of standard system mounts. What you won't see is anything from the host — no home directories, no `/var`, no host-specific paths. The container's filesystem view is bounded by what the image provides. Host paths don't leak in.
+
+== User Context
 
 [source,bash,role=execute]
 ----
@@ -46,111 +55,115 @@ whoami
 id
 ----
 
-The container runs as a non-root user (UID 65532), even though you launched Podman as root on the host. This is a security best practice — the `hostinfo-app` image was built to drop privileges, so a vulnerability in the application cannot be easily escalated to root access.
+The container runs as UID 65532 — a non-root user with no special privileges. On the host you are running as `rhel`, but the image drops to an even more restricted UID. The `hostinfo-app` image was built this way deliberately: the application doesn't need elevated privileges, and running without them limits what a compromised process could do.
 
-== Inspect the Container Filesystem
-
-[source,bash,role=execute]
-----
-df -hP
-----
-
-[source,bash,role=execute]
-----
-mount | grep overlay
-----
-
-The root filesystem (`/`) is an overlay filesystem. Overlay mounts a read-only base (the image layers) with a thin writable layer on top. Anything you write inside the container goes into that writable layer — and disappears when the container is removed.
-
-[NOTE]
-====
-`tmpfs` mounts are RAM-backed temporary filesystems. `/tmp`, `/run`, and similar paths in containers are often tmpfs — again, no persistence.
-====
-
-== Process Isolation
+== Process View
 
 [source,bash,role=execute]
 ----
 ps aux
 ----
 
-You should see only a small number of processes — bash and ps itself. The host's processes are invisible. Each container gets its own PID namespace, so it cannot see or signal processes running outside its boundary.
+Only bash and ps are visible. Every other process on the host — every service, daemon, and user session — is invisible from inside the container. The container has its own PID namespace and cannot see or signal anything outside its boundary.
 
-== Exit and Verify Ephemeral Behavior
+== Shared Kernel
+
+[source,bash,role=execute]
+----
+uname -r
+----
+
+The kernel version matches the host. A container doesn't run its own kernel — it shares the host kernel directly. The isolation you've seen so far (filesystem scope, user context, process view) is enforced by kernel namespaces and cgroups, not by a hypervisor. This is why containers start in milliseconds rather than seconds, and why they're not a complete security boundary on their own.
+
+== The Host's View
+
+Exit the container:
 
 [source,bash,role=execute]
 ----
 exit
 ----
 
-Back on the host, check for running containers:
+From inside, the container looked like a self-contained environment. From the host, it's a process. Run the container in the background to observe it from the host side:
 
 [source,bash,role=execute]
 ----
-podman ps
+CID=$(podman run -d --name hostinfo-demo ${REGISTRY}/hostinfo-app)
 ----
 
-The container is gone. `--rm` cleaned it up on exit. Nothing persisted.
+* `-d` — detached: run in the background and return the container ID
 
-== Demonstrate the Ephemeral Filesystem
+The full container ID is captured in `$CID`. Like the name, the ID is a valid way to refer to a container in any Podman command — names are for human readability, IDs are how Podman and the kernel track containers internally. You'll use both interchangeably as you work with containers.
 
-Run a container that creates a file, then verify the file doesn't exist in a fresh container:
-
-First, confirm the file doesn't exist before you create it:
+Find the container's processes in the host process table:
 
 [source,bash,role=execute]
 ----
-podman run --rm ${REGISTRY}/hostinfo-app cat /tmp/myfile.txt
+ps aux | grep gunicorn
 ----
 
-That errors — the file doesn't exist. Now create it inside a container:
+[source,text]
+----
+65532    12345  0.0  0.1  45678  9876 ?  Ss   10:00  0:00 /app/venv/bin/gunicorn hostinfo:app -w 2 -b 0.0.0.0:8000
+65532    12346  0.0  0.1  45678  9876 ?  S    10:00  0:00 /app/venv/bin/gunicorn hostinfo:app -w 2 -b 0.0.0.0:8000
+----
+
+The container's processes appear in the host's process table like any other process. The user shows as `65532` — a numeric UID with no name, because that user has no entry in the host's `/etc/passwd`. The kernel enforces the UID regardless.
+
+`podman top` gives a container-aware view of the same processes — equivalent to running `ps aux` from inside the container, but read from the host:
 
 [source,bash,role=execute]
 ----
-podman run -it --rm ${REGISTRY}/hostinfo-app /bin/bash
+podman top hostinfo-demo
 ----
 
-Inside the container, create a file:
+[source,text]
+----
+USER        PID    PPID   %CPU  ELAPSED  TTY  TIME  COMMAND
+65532       12345  12340  0.0   10s      ?    0s    /app/venv/bin/gunicorn hostinfo:app -w 2 -b 0.0.0.0:8000
+65532       12346  12345  0.0   10s      ?    0s    /app/venv/bin/gunicorn hostinfo:app -w 2 -b 0.0.0.0:8000
+----
+
+`podman stats` shows live resource usage for a running container — useful for checking what a container is actually consuming:
 
 [source,bash,role=execute]
 ----
-echo "test data" > /tmp/myfile.txt
-cat /tmp/myfile.txt
+podman stats --no-stream hostinfo-demo
 ----
 
-The file is there. Exit:
+[source,text]
+----
+ID            NAME           CPU %   MEM USAGE / LIMIT   MEM %   NET IO      BLOCK IO   PIDS
+a1b2c3d4  hostinfo-demo  0.00%   8.5MB / 7.6GB       0.11%   656B / 0B   0B / 0B    3
+----
+
+The isolation you've been observing has a mechanism behind it. Rootless Podman containers are scoped to your user's cgroup tree. The cgroup scope name contains the container ID — use `$CID` to find it directly:
 
 [source,bash,role=execute]
 ----
-exit
+systemd-cgls --user --no-pager | grep -A4 $CID
 ----
 
-Now try to read it in a new container instance:
+[source,text]
+----
+  └─app.slice
+    └─libpod-a1b2c3d4e5f6[...].scope
+      └─container
+        ├─12345 /app/venv/bin/gunicorn hostinfo:app -w 2 -b 0.0.0.0:8000
+        └─12346 /app/venv/bin/gunicorn hostinfo:app -w 2 -b 0.0.0.0:8000
+----
+
+The same ID Podman returned when you started the container is in the cgroup scope name. The container has its own scope within your user's cgroup tree — this is where the kernel enforces the isolation you observed from inside: the separate process view, the resource accounting, the UID.
+
+Clean up the background container:
 
 [source,bash,role=execute]
 ----
-podman run --rm ${REGISTRY}/hostinfo-app cat /tmp/myfile.txt
+podman rm -f hostinfo-demo
 ----
 
-The file is gone. Each `podman run` creates a completely fresh container from the image — there is no shared state between runs unless you explicitly add it.
+== What's Next
 
-[source,bash,role=execute]
-----
-podman ps -a
-----
+The isolation you've seen here is the default. A container gets its own filesystem, its own user context, its own process view — and the host doesn't cross those boundaries unless you explicitly allow it.
 
-No containers listed. `--rm` removed them all on exit.
-
-[TIP]
-====
-This ephemeral behavior is a core container design principle. For configuration that needs to survive across container runs, you'll use volume mounts. For data that needs to persist, you'll use named volumes or bind mounts. Both are covered in the zt-podman-deploy lab.
-====
-
-You've now completed the Podman Basics lab. You can:
-
-* Verify Podman installation and understand its CLI structure
-* Pull images from a registry and inspect image metadata with both skopeo and podman
-* Understand image layers and how tags work
-* Run containers interactively and observe filesystem isolation, process isolation, and ephemeral behavior
-
-The *zt-podman-deploy* lab picks up from here and covers running detached application containers, managing container lifecycle, and injecting configuration via volume mounts using the same `hostinfo-app` application.
+Running a real application means deciding which host resources it needs access to, and how to grant that access safely. Published ports, volume mounts, and environment variables are all ways of punching deliberate, controlled holes in the isolation boundary. That's where the work of deploying containerized applications begins.
