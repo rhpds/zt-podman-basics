@@ -28,14 +28,14 @@ Podman 5.x is the current major version on RHEL 10. The version string follows `
 
 Rootless and rootful Podman use completely separate image stores. As the `rhel` user, your images are stored in your home directory under `~/.local/share/containers/storage/`. Rootful Podman uses the system store at `/var/lib/containers/storage/`. The two are independent — pulling an image as `rhel` makes it visible only to `rhel`'s Podman.
 
-User-level Podman configuration lives here:
+Your rootless image store lives under your home directory:
 
 [source,bash,role=execute]
 ----
-ls ~/.config/containers/
+ls ~/.local/share/containers/storage/
 ----
 
-System-wide defaults are in `/etc/containers/`. For rootless operations, Podman checks your user config first, then falls back to the system config.
+This directory was created when Podman first ran as the `rhel` user. User-level configuration goes in `~/.config/containers/`; system-wide defaults are in `/etc/containers/`. For rootless operations, Podman checks user config first, then falls back to system config.
 
 Check what images are in your store:
 
@@ -67,10 +67,11 @@ sudo podman images
 
 [source,text]
 ----
-REPOSITORY   TAG   IMAGE ID   CREATED   SIZE
+REPOSITORY                 TAG   IMAGE ID      CREATED       SIZE
+docker.io/library/registry 2     a1b2c3d4e5f6  3 months ago  26.2 MB
 ----
 
-The system store is empty. Same host, same Podman binary, different stores — rootless images live in your home directory, system images live in `/var/lib/containers/storage/`. An image pulled as `rhel` is not available to system containers, and images in the system store are not visible to your rootless Podman.
+The local container registry this lab uses is itself running as a system container — that's why it appears here and not in your rootless store. Same host, same Podman binary, different stores: your images live in `~/.local/share/containers/storage/`, system images live in `/var/lib/containers/storage/`. An image pulled as `rhel` is not available to system containers, and images in the system store are not visible to your rootless Podman.
 
 == Check Running Containers
 

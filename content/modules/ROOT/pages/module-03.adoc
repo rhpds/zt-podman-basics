@@ -41,14 +41,25 @@ This is the application's configuration. It's part of the image — present ever
 df -hP
 ----
 
-You'll see the container's root filesystem and a handful of standard system mounts. What you won't see is anything from the host — no home directories, no `/var`, no host-specific paths. The container's filesystem view is bounded by what the image provides. Host paths don't leak in.
+The root filesystem is an overlay — the image layers stacked together with a thin writable layer on top. Directories like `/var` and `/home` exist within that overlay as empty directories. They're not connected to the host's `/var` or `/home` — those paths and their contents are not visible here.
 
-== User Context
+The only host filesystem paths that cross into the container are the three network configuration files the runtime injects automatically:
 
 [source,bash,role=execute]
 ----
-whoami
+grep '/etc/' /proc/mounts
 ----
+
+[source,text]
+----
+/dev/sdX /etc/hostname ext4 ro,...
+/dev/sdX /etc/hosts ext4 ro,...
+/dev/sdX /etc/resolv.conf ext4 ro,...
+----
+
+Everything else in the container's filesystem is the image's content.
+
+== User Context
 
 [source,bash,role=execute]
 ----
@@ -59,12 +70,14 @@ The container runs as UID 65532 — a non-root user with no special privileges. 
 
 == Process View
 
+The container has its own PID namespace — it can only see processes within its own boundary. Check which PIDs are visible:
+
 [source,bash,role=execute]
 ----
-ps aux
+ls /proc | grep -E '^[0-9]+$'
 ----
 
-Only bash and ps are visible. Every other process on the host — every service, daemon, and user session — is invisible from inside the container. The container has its own PID namespace and cannot see or signal anything outside its boundary.
+Only a handful of PIDs are listed: the bash shell you're running and its parent processes. Every other process on the host — every service, daemon, and user session — is invisible. The container cannot see or signal anything outside its PID namespace.
 
 == Shared Kernel
 
@@ -73,7 +86,7 @@ Only bash and ps are visible. Every other process on the host — every service,
 uname -r
 ----
 
-The kernel version matches the host. A container doesn't run its own kernel — it shares the host kernel directly. The isolation you've seen so far (filesystem scope, user context, process view) is enforced by kernel namespaces and cgroups, not by a hypervisor. This is why containers start in milliseconds rather than seconds, and why they're not a complete security boundary on their own.
+Note this kernel version — you'll verify it against the host in a moment. A container doesn't run its own kernel — it shares the host kernel directly. The isolation you've seen (filesystem scope, user context, process view) is enforced by kernel namespaces and cgroups, not by a hypervisor. This is why containers start in milliseconds rather than seconds, and why they're not a complete security boundary on their own.
 
 == The Host's View
 
@@ -89,13 +102,40 @@ From inside, the container looked like a self-contained environment. From the ho
 [source,bash,role=execute]
 ----
 CID=$(podman run -d --name hostinfo-demo ${REGISTRY}/hostinfo-app)
+echo $CID
 ----
 
 * `-d` — detached: run in the background and return the container ID
 
 The full container ID is captured in `$CID`. Like the name, the ID is a valid way to refer to a container in any Podman command — names are for human readability, IDs are how Podman and the kernel track containers internally. You'll use both interchangeably as you work with containers.
 
-Find the container's processes in the host process table:
+Confirm the kernel version matches what you saw inside the container:
+
+[source,bash,role=execute]
+----
+uname -r
+----
+
+Same version — the container shared this kernel the entire time.
+
+Find the command the container is running, then use it to locate the process on the host:
+
+[source,bash,role=execute]
+----
+podman inspect $CID | grep -A6 '"Cmd"'
+----
+
+[source,text]
+----
+        "Cmd": [
+            "/app/venv/bin/gunicorn",
+            "--workers",
+            "2",
+            "--bind",
+            "0.0.0.0:8000",
+            "app:app"
+        ],
+----
 
 [source,bash,role=execute]
 ----
@@ -104,11 +144,11 @@ ps aux | grep gunicorn
 
 [source,text]
 ----
-65532    12345  0.0  0.1  45678  9876 ?  Ss   10:00  0:00 /app/venv/bin/gunicorn hostinfo:app -w 2 -b 0.0.0.0:8000
-65532    12346  0.0  0.1  45678  9876 ?  S    10:00  0:00 /app/venv/bin/gunicorn hostinfo:app -w 2 -b 0.0.0.0:8000
+983035   68739  0.0  0.6  30812 24740 ?  Ss   11:58  0:00 /app/venv/bin/python3 /app/venv/bin/gunicorn --workers 2 --bind 0.0.0.0:8000 app:app
+983035   68741  0.0  0.8  41296 29812 ?  S    11:58  0:00 /app/venv/bin/python3 /app/venv/bin/gunicorn --workers 2 --bind 0.0.0.0:8000 app:app
 ----
 
-The container's processes appear in the host's process table like any other process. The user shows as `65532` — a numeric UID with no name, because that user has no entry in the host's `/etc/passwd`. The kernel enforces the UID regardless.
+The UID on the host is not 65532 — it's a number from a different range entirely. Rootless Podman uses user namespaces: container UIDs are mapped to a range of host UIDs allocated to the `rhel` user via `/etc/subuid`. Inside the container you see UID 65532; on the host the kernel sees the mapped UID. The isolation is real at the kernel level, not just in Podman's view.
 
 `podman top` gives a container-aware view of the same processes — equivalent to running `ps aux` from inside the container, but read from the host:
 

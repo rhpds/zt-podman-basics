@@ -83,7 +83,7 @@ Each `Copying blob` line is a layer — a compressed filesystem tarball being fe
 
 [source,bash,role=execute]
 ----
-podman history ${REGISTRY}/hostinfo-app
+podman history ${REGISTRY}/hostinfo-app | head -15
 ----
 
 [source,text]
@@ -97,7 +97,7 @@ a1b2c3d4e5f6  8 weeks ago    /bin/sh -c #(nop) CMD ["/app/venv/bin/gu...  0 B
 ...
 ----
 
-The output is long — this image has over 30 layers. The `<missing>` image ID is normal for pulled images: intermediate layer IDs aren't stored locally, only the final image's ID. What you can read is the CREATED BY column — it shows the instruction that produced each layer. The top rows are application steps: the default command set, files copied in, packages installed. Further down are the base image layers: the Python runtime, OS packages, system libraries.
+The `<missing>` image ID is normal for pulled images — intermediate layer IDs aren't stored locally, only the final image's ID. Read the CREATED BY column instead: it shows the instruction that produced each layer. The timestamp is the boundary marker — recent layers (8 weeks) are application steps (CMD set, files copied in, packages installed); older layers (2 months) are the base image: the Python runtime, OS packages, system libraries.
 
 Each row is one filesystem snapshot stacked on the previous. The final image is all of them in order, read-only. When you run a container, a thin writable layer is added on top — but the image layers themselves never change.
 
@@ -153,7 +153,7 @@ Verify it's in the registry alongside `hostinfo-app`:
 podman search ${REGISTRY}/
 ----
 
-Now remove the original public registry reference:
+Now remove the original public registry reference. `podman rmi` removes an image reference from local storage:
 
 [source,bash,role=execute]
 ----
