@@ -1,20 +1,33 @@
 = Working with a Container Registry
 
-A container image is a stack of compressed filesystem snapshots bundled with metadata that describes how to run them. A registry stores and serves those bundles — you refer to them by name, but what you're actually getting is addressed by a content hash. Local operations like tagging and retagging leave that hash unchanged. Registry operations like push and pull can produce a different digest even for identical content.
+A container image is a stack of compressed filesystem snapshots bundled with metadata that describes how to run them.
+
+A registry stores and serves images as a name and tag associated with a hash value.
+The image reference you use to pull from or push to a registry is made up of three parts.
+First is the name of the registry.
+We'll see how this works during this part of the lab.
+Next is what's called the 'repository' that many just refer to as the name.
+In reality, this can include a lot of different information depending on the type and configuration of the registry.
+For example, the Red Hat `registry.access.redhat.com` registry groups UBI images by version as part of the repository information, where `quay.io` might include username or organization name in addition to the name of the image.
+Finally comes the tag, which allows for identifying certain versions of images.
 
 == Registry Types
 
 Registries come in a few varieties:
 
-* **Public registries** — open to anyone: `docker.io`, `ghcr.io`, `quay.io`, `registry.access.redhat.com`
-* **Private enterprise registries** — access-controlled, used in production and air-gapped environments
-* **Local registries** — running on the same network or machine, for development, testing, and disconnected environments
+* **Public registries** — these allow for anonymous pulls of published images, like some images in `quay.io` or `docker.io`
+* **Private registries** — access-controlled, used in production and air-gapped environments
 
-This lab uses a **local registry** running on this system. The registry hostname is stored in the `REGISTRY` environment variable. It uses SSL and requires no authentication.
+In addition to these sorts of full featured sites, you can run a simple registry for local usage.
+This lab uses a **local registry** running on this system.
+It uses SSL but requires no authentication.
+
+The registry hostname is stored in the `REGISTRY` environment variable for convenience.
 
 == Search the Registry
 
-Discover what images are available:
+You can use `podman` to find images without needing to visit a website.
+The built in `search` command can look for images that contain a specific name in any registry that supports search.
 
 [source,bash,role=execute]
 ----
@@ -27,11 +40,13 @@ NAME                               DESCRIPTION
 registry-xxx.example.com/hostinfo-app
 ----
 
-One image is available. You'll add a second later in this module.
+One image is available in the local registry.
 
 == Inspect Before You Pull
 
-Before downloading an image, use `skopeo` to read its metadata directly from the registry — without pulling a single byte.
+Before downloading an image, you might want to find out more information about it than what was returned in search.
+Another container tool useful for dealing with remote images and registries is `skopeo`.
+Use `skopeo` to read the image metadata directly from the registry.
 
 [source,bash,role=execute]
 ----
@@ -56,9 +71,13 @@ Before pulling, you already know:
 * It's a Python 3.11 runtime
 * The application lives in `/app/venv`, which is first on the PATH
 
-This is part of the metadata bundled with the image. Skopeo reads it straight from the registry API, which makes it useful for auditing images before pulling them in automated pipelines or air-gapped environments where you want to verify before committing to a download.
+This is part of the metadata bundled with the image.
+Skopeo reads it straight from the registry API, which makes it useful for auditing images before pulling them in automated pipelines or air-gapped environments where you want to verify before committing to a download.
 
 == Pull the Image
+
+To run a container, you first need to have the image available locally.
+You can have `podman` download it as part of starting it, but we'll use the `pull` command to download it first.
 
 [source,bash,role=execute]
 ----
@@ -77,9 +96,17 @@ Writing manifest to image destination
 registry-xxx.example.com/hostinfo-app:latest
 ----
 
-Each `Copying blob` line is a layer — a compressed filesystem tarball being fetched. Layers are identified by their digest, which means if you already have a layer from a prior pull, Podman skips it. Pulling a second image built on the same base is much faster because the shared base layers are already local.
+Each `Copying blob` line is a layer, a compressed filesystem tarball being fetched.
+Layers are identified by their digest, which means if you already have a layer from a prior pull, `podman` skips it.
+Pulling a second image built on the same base is much faster because the shared base layers are already local.
+
+Local operations like tagging and retagging leave that hash unchanged.
+Registry operations like push and pull can produce a different digest even for identical content.
 
 == Examine the Layers
+
+Like `skopeo`, `podman` can tell you a lot about an image you've downloaded.
+The `history` command will give you layer by layer information about how an image was built.
 
 [source,bash,role=execute]
 ----
@@ -97,15 +124,19 @@ a1b2c3d4e5f6  8 weeks ago    /bin/sh -c #(nop) CMD ["/app/venv/bin/gu...  0 B
 ...
 ----
 
-The `<missing>` image ID is normal for pulled images — intermediate layer IDs aren't stored locally, only the final image's ID. Read the CREATED BY column instead: it shows the instruction that produced each layer. The timestamp is the boundary marker — recent layers (8 weeks) are application steps (CMD set, files copied in, packages installed); older layers (2 months) are the base image: the Python runtime, OS packages, system libraries.
+You can see in the output where the application was installed on the base image.
 
-Each row is one filesystem snapshot stacked on the previous. The final image is all of them in order, read-only. When you run a container, a thin writable layer is added on top — but the image layers themselves never change.
+Each row is one filesystem snapshot stacked on the previous, generated as the output of the command listed.
+The final image is all of them in order, read-only.
+When you run a container, a thin writable layer is added on top but the image layers themselves never change.
 
 == Names Are Metadata
 
-The IMAGE ID is derived from the content of the image — it's a hash of the layer digests. For local operations like tagging and retagging, the IMAGE ID stays the same because the content hasn't changed. You can add names, remove names, and the underlying layers don't move.
+The IMAGE ID is derived from the content of the image, it's a hash of the layer digests.
+For local operations like tagging and retagging, the IMAGE ID stays the same because the content hasn't changed.
+You can add names, remove names, and the underlying layers don't move.
 
-`ubi9` is already in local storage from lab setup. Look at its IMAGE ID:
+`ubi9` is already in local storage from lab setup.
 
 [source,bash,role=execute]
 ----
@@ -119,7 +150,12 @@ registry.access.redhat.com/ubi9/ubi   latest   a1b2c3d4e5f6  3 weeks ago   212 M
 ${REGISTRY}/hostinfo-app              latest   7890abcdef12  2 weeks ago   245 MB
 ----
 
-Add a new name pointing to the same content — a reference for the local registry:
+The REPOSITORY column has the full pattern of registry and repository listed, followed by the tag in the TAG column.
+Look at its IMAGE ID.
+
+If we wanted to copy this image into our local registry, we need to update the repository name to include our registry.
+
+We can do this with `podman tag`
 
 [source,bash,role=execute]
 ----
@@ -139,7 +175,10 @@ ${REGISTRY}/ubi9                       latest   a1b2c3d4e5f6  3 weeks ago   212 
 ${REGISTRY}/hostinfo-app              latest   7890abcdef12  2 weeks ago   245 MB
 ----
 
-Same IMAGE ID — `podman tag` added a name, not a copy. Push it to the local registry:
+Notice the new repository reference but the IMAGE IDs are the same.
+We haven't done anything that modifies the image, just the metadata.
+
+Now push it to the local registry.
 
 [source,bash,role=execute]
 ----
@@ -153,7 +192,8 @@ Verify it's in the registry alongside `hostinfo-app`:
 podman search ${REGISTRY}/
 ----
 
-Now remove the original public registry reference. `podman rmi` removes an image reference from local storage:
+With our copy available to the local network, we don't need to keep the local copy.
+Use `podman rmi` to remove an image reference from local storage.
 
 [source,bash,role=execute]
 ----
@@ -165,7 +205,9 @@ podman rmi registry.access.redhat.com/ubi9/ubi
 Untagged: registry.access.redhat.com/ubi9/ubi:latest
 ----
 
-**Untagged**, not **Deleted**. The content is still present because `${REGISTRY}/ubi9` still references it. A name is a pointer to content — removing the pointer doesn't remove what it pointed at.
+Notice the output was **Untagged**, not **Deleted**.
+The image is still present because `${REGISTRY}/ubi9` still references it.
+A name is a pointer to content — removing the pointer doesn't remove what it pointed at.
 
 [source,bash,role=execute]
 ----
@@ -178,8 +220,6 @@ REPOSITORY             TAG      IMAGE ID      CREATED       SIZE
 ${REGISTRY}/ubi9       latest   a1b2c3d4e5f6  3 weeks ago   212 MB
 ${REGISTRY}/hostinfo-app  latest  7890abcdef12  2 weeks ago   245 MB
 ----
-
-Same IMAGE ID. The content never moved.
 
 == What the Image Declares
 
@@ -197,6 +237,8 @@ podman inspect ${REGISTRY}/hostinfo-app | grep -A2 ExposedPorts
         },
 ----
 
-The image declares it expects to be reachable on port 8000. This is metadata set by the image author — it's not enforced automatically, but it's the contract the image publishes. You'll need this when you map container ports to the host.
+The image declares it expects to be reachable on port 8000.
+This is metadata set by the image author but it's not enforced automatically.
+You'll need this when you map container ports to the host.
 
-In the next module you'll run `hostinfo-app` interactively and see what its isolation looks like from the inside.
+In the next module you'll run this `hostinfo-app` image as a container and see what sort of isolation happens in practice.
