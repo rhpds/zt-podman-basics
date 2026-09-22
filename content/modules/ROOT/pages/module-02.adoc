@@ -115,16 +115,24 @@ podman history ${REGISTRY}/hostinfo-app | head -15
 
 [source,text]
 ----
-ID            CREATED        CREATED BY                                     SIZE
-a1b2c3d4e5f6  8 weeks ago    /bin/sh -c #(nop) CMD ["/app/venv/bin/gu...  0 B
-<missing>     8 weeks ago    /bin/sh -c #(nop) COPY dir:a1b2 in /app/      7.1 kB
-<missing>     8 weeks ago    /bin/sh -c pip install --no-cache-dir -r ...   45.2 MB
-<missing>     8 weeks ago    /bin/sh -c #(nop) WORKDIR /app                 0 B
-<missing>     2 months ago   /bin/sh -c dnf install -y python3.11 ...       312 MB
+ID            CREATED       CREATED BY                                     SIZE        COMMENT
+9ae255f39367  5 days ago    /bin/sh -c #(nop) CMD ["gunicorn", "--work...  0B          FROM cd224f9f7e67
+<missing>     5 days ago    /bin/sh -c #(nop) ENV PATH="/app/venv/bin:...  0B          FROM 333b7dcec044
+<missing>     5 days ago    /bin/sh -c #(nop) ENV PYTHONDONTWRITEBYTEC...  0B          FROM eca2c6878f4b
+<missing>     5 days ago    /bin/sh -c #(nop) EXPOSE 8000                  0B          FROM 15f2791250a6
+<missing>     5 days ago    /bin/sh -c #(nop) COPY dir:2db9eb7465299e6...  30.2kB      FROM fe1d4b39a126
+<missing>     5 days ago    /bin/sh -c /app/venv/bin/pip install --no-...  6.48MB      FROM 3e6870aa740e
+<missing>     5 days ago    /bin/sh -c #(nop) COPY file:8761797e68f71e...  3.58kB      FROM f6cdff4adc82
+<missing>     5 days ago    /bin/sh -c python3 -m venv /app/venv           19MB        FROM c012275e62f2
+<missing>     5 days ago    /bin/sh -c #(nop) WORKDIR /app                 0B          FROM registry.access.redhat.com/hi/python:3.11-builder
+<missing>     6 days ago    /bin/sh -c #(nop) LABEL "org.opencontainer...  0B
 ...
 ----
 
 You can see in the output where the application was installed on the base image.
+In the COMMENT column, look for the word `FROM`, this is the base image.
+Everything from that line upward is work done to build the application.
+Below that line are layers created by Red Hat to create the base.
 
 Each row is one filesystem snapshot stacked on the previous, generated as the output of the command listed.
 The final image is all of them in order, read-only.

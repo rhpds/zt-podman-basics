@@ -22,7 +22,7 @@ As a rule, anything before the image name are options for `podman`, and anything
 * `--rm` — remove the container when it exits
 * `/bin/bash` — override the default CMD; run bash instead of the application
 
-Your prompt changes to something like `root@a1b2c3d4e5f6:/#` — you're inside the container.
+Your prompt changes to `bash-5.3$` — you're a user inside the container.
 
 == The Application Environment
 
@@ -66,6 +66,17 @@ grep '/etc/' /proc/mounts
 /dev/sdX /etc/resolv.conf ext4 ro,...
 ----
 
+[source,bash,role=execute]
+----
+cat /etc/resolv.conf
+----
+
+[source,text]
+----
+search lab.sandbox-kfb7n-zt-rhelbu.svc.cluster.local sandbox-kfb7n-zt-rhelbu.svc.cluster.local svc.cluster.local cluster.local ocpvdev01.dal13.infra.demo.redhat.com
+nameserver 169.254.1.1
+nameserver 172.30.0.10
+----
 Everything else in the container's filesystem is the image's content.
 
 == User Context
