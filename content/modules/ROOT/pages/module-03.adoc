@@ -22,7 +22,7 @@ As a rule, anything before the image name are options for `podman`, and anything
 * `--rm` — remove the container when it exits
 * `/bin/bash` — override the default CMD; run bash instead of the application
 
-Your prompt changes to `bash-5.3$` — you're a user inside the container.
+Your prompt changes to `bash-5.3$` and  you're now at an interactive shell inside the container.
 
 == The Application Environment
 
@@ -33,11 +33,15 @@ This means the container will start processes from that directory, so it's likel
 ----
 ls /app
 ----
+....
+....
 
 [source,bash,role=execute]
 ----
 cat /app/config.json
 ----
+....
+....
 
 This is the application's configuration. It's part of the image — present every time a container starts from this image.
 
@@ -47,6 +51,8 @@ This is the application's configuration. It's part of the image — present ever
 ----
 df -hP
 ----
+....
+....
 
 The root filesystem is an overlay — the image layers stacked together with a thin writable layer on top.
 Directories like `/var` and `/home` exist within that overlay as empty directories.
@@ -144,9 +150,23 @@ Since we ran the container interactively, the container stops once the command (
 From inside, the container looked like a self-contained environment.
 From the host, it's a process.
 
-To run a container more like an independent service, we can run it detached.
-Instead of a shell, we get the ID of the running container.
+Remember our `podman ps` command?
+It can also tell you about containers that were running, not just running at the moment.
 
+[source,bash,role=execute]
+----
+podman ps -a
+----
+....
+....
+
+== The Service Play
+
+Interactive shells and apps that are isolated can be useful, but most container use cases are long lived services.
+To run a container like an independent service, we can run it detached.
+When that command exits we get the ID of the running container instead of a shell.
+
+NOTE: The full container ID is captured in `${CID}` for easier use later.
 [source,bash,role=execute]
 ----
 CID=$(podman run -d --name hostinfo-demo ${REGISTRY}/hostinfo-app)
@@ -155,16 +175,22 @@ echo ${CID}
 
 * `-d` — detached: run in the background and return the container ID
 
-There's also an `attach` command that can connect directly to STDIN, STDOUT, and STDERR, which is subtly different than `interactive`.
-The major difference is how STDIN is handled, `interactive` being more useful for shells and such.
-
-NOTE: The full container ID is captured in `${CID}` for easier use later.
-
 Like the name, the ID is a valid way to refer to a container in any Podman command — names are for human readability, IDs are how Podman and the kernel track containers internally. You'll use both interchangeably as you work with containers.
 
+NOTE: There's also an `attach` command that can connect directly to STDIN, STDOUT, and STDERR, which is subtly different than the `interactive` run mode. The major difference is how STDIN is handled, `interactive` being more useful for shells and such.
+
+Now we see not only the recently exited interactive `bash` run, but the new `hostinfo-demo` as well.
+[source,bash,role=execute]
+----
+podman ps -a
+----
+....
+....
+
+== Examining the container
 
 To find the command a container is running you can use `inspect` to find all of the information about a specific container.
-This is a fairly large JSON output so you can use a special `--format` option to return the fields or just use `grep`.
+This is a fairly large JSON output so you can use a special `--format` option to return the fields or just use `grep` for the field `Cmd`.
 
 [source,bash,role=execute]
 ----
@@ -198,7 +224,7 @@ ps aux | grep gunicorn
 
 The UID on the host isn't 65532 like we saw in the `skopeo inspect` and it doesn't resolve to a known name either.
 Rootless Podman uses user namespaces: container UIDs are mapped to a range of host UIDs allocated to the `rhel` user via `/etc/subuid`.
-Inside the container you see UID 65532; on the host the kernel sees the mapped UID.
+Inside the container you saw UID 65532 but the host the kernel sees the mapped UID.
 The isolation is real at the kernel level, not just in Podman's view.
 
 You can also use `podman top` to give a container-aware view of the same processes.
@@ -215,7 +241,7 @@ USER        PID    PPID   %CPU  ELAPSED  TTY  TIME  COMMAND
 65532       12346  12345  0.0   10s      ?    0s    /app/venv/bin/gunicorn hostinfo:app -w 2 -b 0.0.0.0:8000
 ----
 
-Same information but here you can see the UID from the image metadata.
+Same information but here you can see the UID from the container perspective.
 
 There's another command, `podman stats` to show live resource usage for a running container.
 
@@ -231,7 +257,7 @@ a1b2c3d4  hostinfo-demo  0.00%   8.5MB / 7.6GB       0.11%   656B / 0B   0B / 0B
 ----
 
 The mechanism behind the isolation we're exploring is `cgroups`.
-Rootless Podman containers are scoped to your user's cgroup tree.
+Rootless `podman` containers are scoped to a user's cgroup tree.
 The container ID is associated with the `cgroup` name, which we can inspect with `systemd-cgls`.
 
 [source,bash,role=execute]
@@ -250,15 +276,15 @@ systemd-cgls --user --no-pager | grep -A4 ${CID}
 
 The container has its own scope within your user's cgroup tree — this is where the kernel enforces the isolation you observed from inside: the separate process view, the resource accounting, the UID.
 
-Clean up the background container:
-
-[source,bash,role=execute]
-----
-podman rm -f hostinfo-demo
-----
+And that's all you really need to find and run a service as a user or as `root`.
 
 == What's Next
 
-The isolation you've seen here is the default. A container gets its own filesystem, its own user context, its own process view — and the host doesn't cross those boundaries unless you explicitly allow it.
+The isolation you've seen here is the default. 
+A container gets its own filesystem, its own user context, its own process view — and the host doesn't cross those boundaries unless you explicitly allow it.
 
-Running a real application means deciding which host resources it needs access to, and how to grant that access safely. Published ports, volume mounts, and environment variables are all ways of punching deliberate, controlled holes in the isolation boundary. That's where the work of deploying containerized applications begins.
+The decision between `rootless` and `rootful` however changes based on the service.
+Running a real application means deciding which host resources it needs access to, and how to grant that access safely. 
+Published ports, volume mounts, and environment variables are all ways of punching deliberate, controlled holes in the isolation boundary. 
+That's where the work of deploying containerized applications begins.
+Check our other labs to explore how to create system services or run pods from containers.

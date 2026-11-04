@@ -4,11 +4,16 @@ A container image is a stack of compressed filesystem snapshots bundled with met
 
 A registry stores and serves images as a name and tag associated with a hash value.
 The image reference you use to pull from or push to a registry is made up of three parts.
+
+image::image-ref.png[UBI 10 OCI reference]
+
 First is the name of the registry.
 We'll see how this works during this part of the lab.
+
 Next is what's called the 'repository' that many just refer to as the name.
 In reality, this can include a lot of different information depending on the type and configuration of the registry.
 For example, the Red Hat `registry.access.redhat.com` registry groups UBI images by version as part of the repository information, where `quay.io` might include username or organization name in addition to the name of the image.
+
 Finally comes the tag, which allows for identifying certain versions of images.
 
 == Registry Types
@@ -16,13 +21,13 @@ Finally comes the tag, which allows for identifying certain versions of images.
 Registries come in a few varieties:
 
 * **Public registries** — these allow for anonymous pulls of published images, like some images in `quay.io` or `docker.io`
-* **Private registries** — access-controlled, used in production and air-gapped environments
+* **Private registries** — access-controlled, used in production and air-gapped environments like Artefactory or Red Hat Satellite
 
 In addition to these sorts of full featured sites, you can run a simple registry for local usage.
 This lab uses a **local registry** running on this system.
 It uses SSL but requires no authentication.
 
-The registry hostname is stored in the `REGISTRY` environment variable for convenience.
+For this lab, the registry hostname is stored in the `REGISTRY` environment variable for convenience.
 
 == Search the Registry
 
@@ -40,13 +45,38 @@ NAME                               DESCRIPTION
 registry-xxx.example.com/hostinfo-app
 ----
 
-One image is available in the local registry.
+The local registry acts differently than a production registry and the filtering is done by `podman`. 
+When searching in one of these, `search` like this will probably fail, and how substrings are handled by the particular registry.
+
+For example, *quay.io* searches the namespaces as well as metadata, so there may be more results than you might originally expect.
+
+[source,bash,role=execute]
+----
+podman search --limit 10 quay.io/fedora/fedora
+----
+
+[source,text]
+----
+NAME                               DESCRIPTION
+quay.io/fedora/fedora                  
+quay.io/fedora/fedora-coreos           
+quay.io/fedora/fedora-bootc            
+quay.io/fedora/fedora-minimal          
+quay.io/fedora/fedora-silverblue       
+quay.io/fedora/fedora-toolbox          
+quay.io/fedora/fedora-coreos-kubevirt  
+quay.io/fedora/fedora-kinoite          
+quay.io/fedora/fedora-iot              
+quay.io/fedora/mysql-80                MySQL 8.0 SQL Database Server container imag...
+----
+
+The `search` subcommand has a number of useful ways to both limit results and add information to the results.
 
 == Inspect Before You Pull
 
 Before downloading an image, you might want to find out more information about it than what was returned in search.
 Another container tool useful for dealing with remote images and registries is `skopeo`.
-Use `skopeo` to read the image metadata directly from the registry.
+You can use `skopeo` to read image metadata directly from the registry.
 
 [source,bash,role=execute]
 ----
@@ -65,11 +95,12 @@ skopeo inspect docker://${REGISTRY}/hostinfo-app | grep -A7 '"Env"'
     ],
 ----
 
+The grep shows us just the section of the metadata that defines the environment variables set in the image.
 Before pulling, you already know:
 
 * The container will run as UID 65532 — not root
 * It's a Python 3.11 runtime
-* The application lives in `/app/venv`, which is first on the PATH
+* The application likely lives in `/app/venv`, which is a non-standard addition the PATH
 
 This is part of the metadata bundled with the image.
 Skopeo reads it straight from the registry API, which makes it useful for auditing images before pulling them in automated pipelines or air-gapped environments where you want to verify before committing to a download.
@@ -98,7 +129,7 @@ registry-xxx.example.com/hostinfo-app:latest
 
 Each `Copying blob` line is a layer, a compressed filesystem tarball being fetched.
 Layers are identified by their digest, which means if you already have a layer from a prior pull, `podman` skips it.
-Pulling a second image built on the same base is much faster because the shared base layers are already local.
+Pulling a second image built on the same base is much faster because the shared base layers already exist.
 
 Local operations like tagging and retagging leave that hash unchanged.
 Registry operations like push and pull can produce a different digest even for identical content.
@@ -130,7 +161,8 @@ ID            CREATED       CREATED BY                                     SIZE 
 ----
 
 You can see in the output where the application was installed on the base image.
-In the COMMENT column, look for the word `FROM`, this is the base image.
+In the COMMENT column, the word `FROM` shows you the hash of the previous starting point.
+Notice that one them is an OCI reference, not a hash.
 Everything from that line upward is work done to build the application.
 Below that line are layers created by Red Hat to create the base.
 
@@ -141,10 +173,10 @@ When you run a container, a thin writable layer is added on top but the image la
 == Names Are Metadata
 
 The IMAGE ID is derived from the content of the image, it's a hash of the layer digests.
-For local operations like tagging and retagging, the IMAGE ID stays the same because the content hasn't changed.
+For local operations like tagging and retagging, the IMAGE ID stays the same because that content isn't changed.
 You can add names, remove names, and the underlying layers don't move.
 
-`ubi9` is already in local storage from lab setup.
+You already saw `ubi9` is in local storage.
 
 [source,bash,role=execute]
 ----
@@ -200,6 +232,9 @@ Verify it's in the registry alongside `hostinfo-app`:
 podman search ${REGISTRY}/
 ----
 
+This process of copying an image from one registry to another is known as mirroring.
+It's a common way to reduce the dependency on a remote service during build, maintain a known set of available images, and more.
+
 With our copy available to the local network, we don't need to keep the local copy.
 Use `podman rmi` to remove an image reference from local storage.
 
@@ -214,8 +249,8 @@ Untagged: registry.access.redhat.com/ubi9/ubi:latest
 ----
 
 Notice the output was **Untagged**, not **Deleted**.
-The image is still present because `${REGISTRY}/ubi9` still references it.
-A name is a pointer to content — removing the pointer doesn't remove what it pointed at.
+The image is still present because `${REGISTRY}/ubi9` still references the ID.
+A name is a pointer, removing the pointer doesn't remove what it pointed at.
 
 [source,bash,role=execute]
 ----
