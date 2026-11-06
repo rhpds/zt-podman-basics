@@ -21,7 +21,7 @@ Finally comes the tag, which allows for identifying certain versions of images.
 Registries come in a few varieties:
 
 * **Public registries** — these allow for anonymous pulls of published images, like some images in `quay.io` or `docker.io`
-* **Private registries** — access-controlled, used in production and air-gapped environments like Artefactory or Red Hat Satellite
+* **Private registries** — access-controlled, used in production and air-gapped environments like Artifactory or Red Hat Satellite
 
 In addition to these sorts of full featured sites, you can run a simple registry for local usage.
 This lab uses a **local registry** running on this system.
@@ -46,7 +46,7 @@ registry-xxx.example.com/hostinfo-app
 ----
 
 The local registry acts differently than a production registry and the filtering is done by `podman`. 
-When searching in one of these, `search` like this will probably fail, and how substrings are handled by the particular registry.
+When searching in one of these, a `search` like this will probably fail, and how substrings are handled depends on the particular registry.
 
 For example, *quay.io* searches the namespaces as well as metadata, so there may be more results than you might originally expect.
 
@@ -100,7 +100,7 @@ Before pulling, you already know:
 
 * The container will run as UID 65532 — not root
 * It's a Python 3.11 runtime
-* The application likely lives in `/app/venv`, which is a non-standard addition the PATH
+* The application likely lives in `/app/venv`, which is a non-standard addition to the PATH
 
 This is part of the metadata bundled with the image.
 Skopeo reads it straight from the registry API, which makes it useful for auditing images before pulling them in automated pipelines or air-gapped environments where you want to verify before committing to a download.
@@ -162,7 +162,7 @@ ID            CREATED       CREATED BY                                     SIZE 
 
 You can see in the output where the application was installed on the base image.
 In the COMMENT column, the word `FROM` shows you the hash of the previous starting point.
-Notice that one them is an OCI reference, not a hash.
+Notice that one of them is an OCI reference, not a hash.
 Everything from that line upward is work done to build the application.
 Below that line are layers created by Red Hat to create the base.
 
@@ -224,8 +224,25 @@ Now push it to the local registry.
 ----
 podman push ${REGISTRY}/ubi9
 ----
+....
+Checking if image destination supports signatures
+Error: Copying this image would require changing layer representation, which we cannot do: "Would invalidate signatures"
+....
 
-Verify it's in the registry alongside `hostinfo-app`:
+Since this is an official Red Hat image, it has a digital signature to prove its validity.
+Working with signatures is part of another lab, so for this lab, we're going to remove it when pushing our copy to the local registry.
+
+[source,bash,role=execute]
+----
+podman push --remove-signatures ${REGISTRY}/ubi9
+----
+....
+Copying blob b38850413dc5 done   | 
+Copying config b90f3ea6a3 done   | 
+Writing manifest to image destination
+....
+
+Verify our new copy is in the registry alongside `hostinfo-app`:
 
 [source,bash,role=execute]
 ----

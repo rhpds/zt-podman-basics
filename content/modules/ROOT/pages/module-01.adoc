@@ -1,12 +1,12 @@
 = Podman Fundamentals
 
 Podman is a daemonless container engine for Linux. 
-This means each container runs as it's own process started by the user or command that launched it.
+This means each container runs as its own process started by the user or command that launched it.
 There's no background service managing and running containers on behalf of some API call.
 
-This gives `podman` two modes modes of operation. 
+This gives `podman` two modes of operation. 
 In *rootless* mode, containers run under a specific user account and are limited by the privileges of that user.
-In *rootful* mode, containers run as root have access to the full range of system capabilities: binding privileged ports, accessing host devices, manipulating network interfaces.
+In *rootful* mode, containers run as root and have access to the full range of system capabilities: binding privileged ports, accessing host devices, manipulating network interfaces.
 
 == Rootless and Rootful Storage
 
@@ -36,11 +36,11 @@ REPOSITORY                             TAG         IMAGE ID      CREATED       S
 registry.access.redhat.com/ubi9/ubi   latest      a1b2c3d4e5f6  3 weeks ago   212 MB
 ----
 
-This `images` subcommand shows a userful set of information about each image in the sotre.
+This `images` subcommand shows a useful set of information about each image in the store.
 
 * **REPOSITORY** — where the image came from, including registry path and full name
 * **TAG** — an optional string used to help identify images, defaults to `latest`
-* **IMAGE ID** — the first 12 characters of content-addressed hash of the image
+* **IMAGE ID** — the first 12 characters of the content-addressed hash of the image
 * **CREATED** — when the image was built
 * **SIZE** — uncompressed size on disk
 
