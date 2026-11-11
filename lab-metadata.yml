@@ -21,4 +21,4 @@ lab:
 
   git_ref:
     production: "main"
-    development: "revision/podman-basics"
+    development: "dev"
