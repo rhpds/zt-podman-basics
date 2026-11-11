@@ -1,0 +1,101 @@
+= Podman Fundamentals
+
+Podman is a daemonless container engine for Linux. 
+This means each container runs as its own process started by the user or command that launched it.
+There's no background service managing and running containers on behalf of some API call.
+
+This gives `podman` two modes of operation. 
+In *rootless* mode, containers run under a specific user account and are limited by the privileges of that user.
+In *rootful* mode, containers run as root and have access to the full range of system capabilities: binding privileged ports, accessing host devices, manipulating network interfaces.
+
+== Rootless and Rootful Storage
+
+In addition to the privilege differences, rootless and rootful `podman` use separate image stores.
+Rootful images reside in the system store at `/var/lib/containers/storage/`.
+As the `rhel` user in this lab, your images are stored in your home directory under `~/.local/share/containers/storage/`.
+
+[source,bash,role=execute]
+----
+ls ~/.local/share/containers/storage/
+----
+
+Configuration follows the same pattern, allowing for differences between user and system settings.
+User-level configuration goes in `~/.config/containers/`; system-wide defaults are in `/etc/containers/`.
+For rootless operations, Podman checks user config first, then falls back to system config.
+
+Check what images are in your store:
+
+[source,bash,role=execute]
+----
+podman images
+----
+
+[source,text]
+----
+REPOSITORY                             TAG         IMAGE ID      CREATED       SIZE
+registry.access.redhat.com/ubi9/ubi   latest      a1b2c3d4e5f6  3 weeks ago   212 MB
+----
+
+This `images` subcommand shows a useful set of information about each image in the store.
+
+* **REPOSITORY** — where the image came from, including registry path and full name
+* **TAG** — an optional string used to help identify images, defaults to `latest`
+* **IMAGE ID** — the first 12 characters of the content-addressed hash of the image
+* **CREATED** — when the image was built
+* **SIZE** — uncompressed size on disk
+
+Now check the system store:
+
+[source,bash,role=execute]
+----
+sudo podman images
+----
+
+[source,text]
+----
+REPOSITORY                 TAG   IMAGE ID      CREATED       SIZE
+docker.io/library/registry 2     a1b2c3d4e5f6  3 months ago  26.2 MB
+----
+
+The container registry this lab uses is itself running as a rootful container via a system service.
+
+An image pulled as `rhel` is not available to system containers, and images in the system store are not visible to your rootless Podman.
+
+== Check Running Containers
+
+While often referred to in the same way, images are the binary sources used to create containers.
+A container is a specific running instance of an image.
+Let's see what's running.
+
+[source,bash,role=execute]
+----
+podman ps
+----
+
+No containers have been started yet so we get an empty list with some headers.
+
+The `ps` columns are:
+
+* **CONTAINER ID** — unique identifier for the container instance
+* **IMAGE** — which image this container was created from
+* **COMMAND** — what command the container is running
+* **CREATED** — when the container was started
+* **STATUS** — current state: `Up`, `Exited`, `Paused`
+* **PORTS** — published port mappings
+* **NAMES** — human-readable name (auto-assigned or you set it with `--name`)
+
+That will get more interesting later in the lab.
+
+== Images vs Containers
+
+Before moving on, a key distinction you'll use throughout this lab:
+
+* An **image** is stored content — a stack of filesystem layers plus metadata describing how to run it. 
+Images are what you pull from registries and what `podman images` lists.
+* A **container** is a running instance of an image — a process on the host, isolated from the host and other containers, with a thin writable layer on top of the image's read-only content. 
+Containers are what `podman ps` tracks.
+
+One image can produce many containers simultaneously. 
+Each gets its own isolation and its own writable layer, but they all read from the same underlying image content.
+
+In the next module you will pull images from the local container registry and begin working with them.

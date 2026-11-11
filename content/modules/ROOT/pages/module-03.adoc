@@ -1,0 +1,359 @@
+= Interactive Containers
+
+A container gives an application its own view of the system — its own filesystem, users, and processes — while sharing the host's kernel.
+In this module you'll explore that isolation from inside a running container, then observe the same container from the host.
+
+== Run a Container Interactively
+
+The image holds a Python application, but also includes `bash`.
+This means we can execute that shell directly using the `run` command to start a container.
+This depends on a few design choices by the image creator, but for this example we know it works.
+
+[source,bash,role=execute]
+----
+podman run -it --rm ${REGISTRY}/hostinfo-app /bin/bash
+----
+
+The `podman run` command has a few flags set to control the behavior of how the container starts.
+As a rule, anything before the image name is an option for `podman`, and anything after is passed to the container.
+
+* `-i` — interactive: keep STDIN open so you can type commands
+* `-t` — allocate a pseudo-TTY so you get a proper shell prompt
+* `--rm` — remove the container when it exits
+* `/bin/bash` — override the default CMD; run bash instead of the application
+
+Your prompt changes to `bash-5.3$` and you're now at an interactive shell inside the container.
+
+== The Application Environment
+
+The layer information in `podman history` showed us a build directive: `WORKDIR /app`.
+This means the container will start processes from that directory, so it's likely the application files are at `/app`.
+
+[source,bash,role=execute]
+----
+ls /app
+----
+....
+app.py  config.json  helpers.py  requirements.txt  static  templates  venv
+....
+
+[source,bash,role=execute]
+----
+cat /app/config.json
+----
+....
+{
+  "python_packages": [
+    "Flask",
+    "gunicorn",
+    "distro",
+    "pip",
+    "non_existent_python_package"
+  ],
+  "system_packages": [
+    "bash",
+    "openssl",
+    "curl",
+    "git",
+    "docker",
+    "nginx",
+    "apache2",
+    "non_existent_system_package"
+  ]
+}
+....
+
+This is the application's configuration. It's part of the image — present every time a container starts from this image.
+
+== Filesystem Scope
+
+[source,bash,role=execute]
+----
+df -hP
+----
+....
+Filesystem      Size  Used Avail Use% Mounted on
+overlay          38G  4.0G   34G  11% /
+tmpfs            64M     0   64M   0% /dev
+tmpfs           362M  132K  362M   1% /etc/hosts
+shm              63M     0   63M   0% /dev/shm
+devtmpfs        1.7G     0  1.7G   0% /dev/tty
+....
+
+The root filesystem is an overlay — the image layers stacked together with a thin writable layer on top.
+Directories like `/var` and `/home` exist within that overlay as empty directories.
+They're not connected to the host's `/var` or `/home` — those paths and their contents are not visible here.
+
+The only host filesystem paths that cross into the container are the three network configuration files the runtime injects automatically:
+
+[source,bash,role=execute]
+----
+grep '/etc/' /proc/mounts
+----
+
+[source,text]
+----
+/dev/sdX /etc/hostname ext4 ro,...
+/dev/sdX /etc/hosts ext4 ro,...
+/dev/sdX /etc/resolv.conf ext4 ro,...
+----
+
+[source,bash,role=execute]
+----
+cat /etc/resolv.conf
+----
+
+[source,text]
+----
+search lab.sandbox-kfb7n-zt-rhelbu.svc.cluster.local sandbox-kfb7n-zt-rhelbu.svc.cluster.local svc.cluster.local cluster.local ocpvdev01.dal13.infra.demo.redhat.com
+nameserver 169.254.1.1
+nameserver 172.30.0.10
+----
+Everything else in the container's filesystem is the image's content.
+
+== User Context
+
+[source,bash,role=execute]
+----
+id
+----
+
+The container runs as UID 65532 — a non-root user with no special privileges.
+On the host you are running as `rhel`, but the image drops to an even more restricted UID.
+The `hostinfo-app` image was built this way deliberately: the application doesn't need elevated privileges, and running without them limits what a compromised process could do.
+
+== Process View
+
+The container has its own PID namespace — it can only see processes within its own boundary. Check which PIDs are visible:
+
+[source,bash,role=execute]
+----
+ls /proc | grep -E '^[0-9]+$'
+----
+
+Only a handful of PIDs are listed: the bash shell you're running and its parent processes.
+Every other process on the host is invisible.
+The container cannot see or signal anything outside its PID namespace.
+
+Why not use `ps`? Well, the base image used to create this application doesn't include it.
+
+[source,bash,role=execute]
+----
+ps
+----
+
+== Shared Kernel
+
+[source,bash,role=execute]
+----
+uname -r
+----
+
+A container doesn't run its own kernel, it shares the host kernel directly.
+The isolation you've seen (filesystem scope, user context, process view) is enforced by kernel namespaces and cgroups, not by a hypervisor.
+This is why containers start in milliseconds rather than seconds, and why they're not a complete security boundary on their own.
+
+== The Host's View
+
+Exit the container:
+
+[source,bash,role=execute]
+----
+exit
+----
+
+Confirm the kernel version matches what you saw inside the container:
+
+[source,bash,role=execute]
+----
+uname -r
+----
+
+Same version — the container shared this kernel the entire time.
+
+Since we ran the container interactively, the container stops once the command (`/bin/bash`) exits.
+
+From inside, the container looked like a self-contained environment.
+From the host, it's a process.
+
+== The Service Play
+
+Interactive shells and apps that are isolated can be useful, but most container use cases are long-lived services.
+To run a container like an independent service, we can run it detached.
+When that command exits we get the ID of the running container instead of a shell.
+
+NOTE: The full container ID is captured in `${CID}` for easier use later.
+[source,bash,role=execute]
+----
+CID=$(podman run -d --name hostinfo-demo ${REGISTRY}/hostinfo-app)
+echo ${CID}
+----
+
+* `-d` — detached: run in the background and return the container ID
+
+Like the name, the ID is a valid way to refer to a container in any Podman command — names are for human readability, IDs are how Podman and the kernel track containers internally. You'll use both interchangeably as you work with containers.
+
+NOTE: There's also an `attach` command that can connect directly to STDIN, STDOUT, and STDERR, which is subtly different than the `interactive` run mode. The major difference is how STDIN is handled, `interactive` being more useful for shells and such.
+
+Get the status information from `podman ps` for our new detached container.
+[source,bash,role=execute]
+----
+podman ps -a
+----
+....
+CONTAINER ID  IMAGE                                                       COMMAND               CREATED        STATUS         PORTS       NAMES
+60500da33e46  registry-22x2r.apps.ocpvdev01.rhdp.net/hostinfo-app:latest  gunicorn --worker...  9 seconds ago  Up 10 seconds  8000/tcp    hostinfo-demo
+....
+
+== Examining the Container
+
+To find the command a container is running you can use `inspect` to find all of the information about a specific container.
+This is a fairly large JSON output so you can use a special `--format` option to return the fields or just use `grep` for the field `Cmd`.
+
+[source,bash,role=execute]
+----
+podman inspect ${CID} | grep -A6 '"Cmd"'
+----
+
+[source,text]
+----
+        "Cmd": [
+            "/app/venv/bin/gunicorn",
+            "--workers",
+            "2",
+            "--bind",
+            "0.0.0.0:8000",
+            "app:app"
+        ],
+----
+
+With the command line of the application, we can look for it in the host process table.
+
+[source,bash,role=execute]
+----
+ps aux | grep gunicorn
+----
+
+[source,text]
+----
+983035   68739  0.0  0.6  30812 24740 ?  Ss   11:58  0:00 /app/venv/bin/python3 /app/venv/bin/gunicorn --workers 2 --bind 0.0.0.0:8000 app:app
+983035   68741  0.0  0.8  41296 29812 ?  S    11:58  0:00 /app/venv/bin/python3 /app/venv/bin/gunicorn --workers 2 --bind 0.0.0.0:8000 app:app
+----
+
+The UID on the host isn't 65532 like we saw in the `skopeo inspect` and it doesn't resolve to a known name either.
+Rootless Podman uses user namespaces: container UIDs are mapped to a range of host UIDs allocated to the `rhel` user via `/etc/subuid`.
+Inside the container you saw UID 65532, but on the host the kernel sees the mapped UID.
+The isolation is real at the kernel level, not just in Podman's view.
+
+You can also use `podman top` to give a container-aware view of the same processes.
+
+[source,bash,role=execute]
+----
+podman top hostinfo-demo
+----
+
+[source,text]
+----
+USER        PID    PPID   %CPU  ELAPSED  TTY  TIME  COMMAND
+65532       12345  12340  0.0   10s      ?    0s    /app/venv/bin/gunicorn hostinfo:app -w 2 -b 0.0.0.0:8000
+65532       12346  12345  0.0   10s      ?    0s    /app/venv/bin/gunicorn hostinfo:app -w 2 -b 0.0.0.0:8000
+----
+
+Same information but here you can see the UID from the container perspective.
+
+There's another command, `podman stats` to show live resource usage for a running container.
+
+[source,bash,role=execute]
+----
+podman stats --no-stream hostinfo-demo
+----
+
+[source,text]
+----
+ID            NAME           CPU %   MEM USAGE / LIMIT   MEM %   NET IO      BLOCK IO   PIDS
+a1b2c3d4  hostinfo-demo  0.00%   8.5MB / 7.6GB       0.11%   656B / 0B   0B / 0B    3
+----
+
+The mechanism behind the isolation we're exploring is `cgroups`.
+Rootless `podman` containers are scoped to a user's cgroup tree.
+The container ID is associated with the `cgroup` name, which we can inspect with `systemd-cgls`.
+
+[source,bash,role=execute]
+----
+systemd-cgls --user --no-pager | grep -A4 ${CID}
+----
+
+[source,text]
+----
+  └─app.slice
+    └─libpod-a1b2c3d4e5f6[...].scope
+      └─container
+        ├─12345 /app/venv/bin/gunicorn hostinfo:app -w 2 -b 0.0.0.0:8000
+        └─12346 /app/venv/bin/gunicorn hostinfo:app -w 2 -b 0.0.0.0:8000
+----
+
+The container has its own scope within your user's cgroup tree — this is where the kernel enforces the isolation you observed from inside: the separate process view, the resource accounting, the UID.
+
+And that's all you really need to find and run a service as a user or as `root`.
+
+== What about a second container?
+We said that containers are isolated and multiple can start from the same image.
+What happens if we run the detached command again, but this time without a name?
+
+[source,bash,role=execute]
+----
+podman run -d ${REGISTRY}/hostinfo-app
+----
+
+We got an ID, but that's not really helpful, let's check `ps`.
+
+[source,bash,role=execute]
+----
+podman ps -a
+----
+....
+CONTAINER ID  IMAGE                                                       COMMAND               CREATED         STATUS         PORTS       NAMES
+60500da33e46  registry-22x2r.apps.ocpvdev01.rhdp.net/hostinfo-app:latest  gunicorn --worker...  5 minutes ago   Up 5 minutes   8000/tcp    hostinfo-demo
+bce8fe6cb179  registry-22x2r.apps.ocpvdev01.rhdp.net/hostinfo-app:latest  gunicorn --worker...  11 seconds ago  Up 12 seconds  8000/tcp    relaxed_hertz
+....
+
+There's a new container in the list, with a random name assigned.
+
+If we look at the cgroups again, we'll get a brand new entry for the new container.
+
+[source,bash,role=execute]
+----
+systemd-cgls --user --no-pager | grep -A8 ${CID}
+----
+
+[source,text]
+----
+  │ │ ├─libpod-conmon-60500da33e46be71f08998b55e755c2174f4c9eff27a47f3dded68bcd46ba096.scope
+│   │ │ │ └─87263 /usr/bin/conmon --api-version 1 -c 60500da33e46be71f08998b55e…
+│   │ │ ├─podman-pause-a7e64ff8.scope
+│   │ │ │ └─15570 catatonit -P
+│   │ │ ├─libpod-bce8fe6cb1798e84f45120b26c68a0100704ea2f215574188e6a097dffc4a15d.scope
+│   │ │ │ └─container
+│   │ │ │   ├─101689 /app/venv/bin/python3 /app/venv/bin/gunicorn --workers 2 -…
+│   │ │ │   ├─101691 /app/venv/bin/python3 /app/venv/bin/gunicorn --workers 2 -…
+│   │ │ │   └─101692 /app/venv/bin/python3 /app/venv/bin/gunicorn --workers 2 -…
+│   │ │ ├─libpod-60500da33e46be71f08998b55e755c2174f4c9eff27a47f3dded68bcd46ba096.scope
+│   │ │ │ └─container
+│   │ │ │   ├─87265 /app/venv/bin/python3 /app/venv/bin/gunicorn --workers 2 --…
+│   │ │ │   ├─87268 /app/venv/bin/python3 /app/venv/bin/gunicorn --workers 2 --…
+│   │ │ │   └─87269 /app/venv/bin/python3 /app/venv/bin/gunicorn --workers 2 --…
+----
+
+You'll see the container IDs match the string after `libpod` in the list.
+The containers are identical and completely independent.
+
+== What's Next
+
+The isolation you've seen here is the default. 
+A container gets its own filesystem, its own user context, its own process view — and the host doesn't cross those boundaries unless you explicitly allow it.
+
+The decision between `rootless` and `rootful` however changes based on the service.
+Running a real application means deciding which host resources it needs access to, and how to grant that access safely. 
+Published ports, volume mounts, and environment variables are all ways of punching deliberate, controlled holes in the isolation boundary. 
+That's where the work of deploying containerized applications begins.
+Check our other labs to explore how to create system services or run pods from containers.

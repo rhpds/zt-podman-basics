@@ -1,0 +1,23 @@
+# lab-metadata.yml
+# Single Point of Truth for Lab Information
+
+lab:
+  name: "Podman Basics"
+  shortname: "zt-podman-basics"
+  maintainer: "Matt Micene (mmicene@redhat.com)"
+
+  description:
+    summary: "Learn container fundamentals using Podman: image management, registries, and how containers isolate processes on the host"
+    goal: "You'll explore how containers function on a system to 'contain' an application and isolate it from the host. You'll aslo get a deeper look at container images and how they are distributed."
+    concepts:
+      - "Daemonless, rootless podman architecture"
+      - "Image layering"
+      - "Using container registries"
+      - "How container isolation works"
+      - "How observing containers changes"
+    use_case: "Understand containers at the system level before deploying workloads"
+    time_to_complete: "15"
+
+  git_ref:
+    production: "main"
+    development: "dev"
